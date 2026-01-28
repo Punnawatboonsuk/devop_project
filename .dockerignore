@@ -1,0 +1,21 @@
+# Node
+**/node_modules
+**/npm-debug.log
+
+# Environment
+**/.env
+**/.env.*
+**/*.env
+
+# OS / Editor junk
+**/.DS_Store
+**/Thumbs.db
+**/.vscode
+**/.idea
+
+# Git
+.git
+.gitignore
+
+# Build output
+dist

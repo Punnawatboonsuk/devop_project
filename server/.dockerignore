@@ -1,0 +1,28 @@
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Prisma
+prisma/dev.db
+prisma/*.db
+prisma/*.db-journal
+
+# Environment
+.env
+.env.*
+*.env
+
+# Build output
+dist
+build
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# Git
+.git
+.gitignore

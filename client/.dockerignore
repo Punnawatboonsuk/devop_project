@@ -1,0 +1,23 @@
+# Node
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build output
+dist
+build
+
+# Environment
+.env
+.env.*
+*.env
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# Git
+.git
+.gitignore
