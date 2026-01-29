@@ -9,6 +9,8 @@ import StaffDashboard from "./pages/staff/Dashboard";
 import ReviewTicket from "./pages/staff/ReviewTicket";
 import Verification from "./pages/admin/Verification";
 import VotingControl from "./pages/admin/VotingControl";
+import VotingBallot from "./pages/committee/VotingBallot";
+import Proclamation from "./pages/committee/Proclamation";
 
 function App() {
   return (
@@ -31,6 +33,16 @@ function App() {
           <Route path="review/:id" element={<ReviewTicket />} />{" "}
           {/* หน้าดูรายละเอียดแบบ Dynamic ID */}
           <Route index element={<Navigate to="dashboard" replace />} />
+        </Route>
+
+        <Route path="/committee" element={<Layout role="COMMITTEE" />}>
+          <Route path="dashboard" element={<h1>Committee Dashboard</h1>} />
+          <Route path="vote" element={<VotingBallot />} />
+          <Route index element={<Navigate to="vote" replace />} />
+        </Route>
+
+        <Route path="/president" element={<Layout role="COMMITTEE" />}>
+          <Route path="proclaim" element={<Proclamation />} />
         </Route>
 
         {/* --- ADMIN ROUTES (ทำทีหลัง) --- */}
