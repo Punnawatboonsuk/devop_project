@@ -1,34 +1,31 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-
-// Mock Pages (สร้างหน้าเปล่าๆ ไว้ทดสอบก่อน)
-const Dashboard = () => <h1 className="text-3xl font-bold text-ku-main">Student Dashboard</h1>;
-const Tracking = () => <div className="p-6 bg-white rounded-xl shadow"><h2 className="text-xl mb-4">Status Tracking</h2><StatusTimeline currentStatus="dev_review" /></div>;
-// import StatusTimeline ต้อง import มาด้วยนะถ้าจะใช้
+// Import Pages ที่สร้างใหม่
+import StudentDashboard from './pages/student/Dashboard';
+import CreateTicket from './pages/student/CreateTicket';
+// import TrackingPage... (ถ้าคุณทำแล้ว)
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* หน้า Login (แยก Layout) */}
         <Route path="/login" element={<div>Login Page</div>} />
 
-        {/* Student Routes */}
+        {/* --- STUDENT ROUTES --- */}
         <Route path="/student" element={<Layout role="STUDENT" />}>
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="tracking" element={<Tracking />} />
-          {/* Redirect default path */}
+          <Route path="dashboard" element={<StudentDashboard />} />
+          <Route path="create" element={<CreateTicket />} />
+          {/* <Route path="tracking" element={<TrackingPage />} /> */}
           <Route index element={<Navigate to="dashboard" replace />} />
         </Route>
 
-        {/* Admin Routes */}
+        {/* --- ADMIN ROUTES (ทำทีหลัง) --- */}
         <Route path="/admin" element={<Layout role="ADMIN" />}>
-          <Route path="dashboard" element={<h1>Admin Dashboard</h1>} />
+           <Route path="dashboard" element={<h1>Admin Dashboard</h1>} />
         </Route>
-        
-        {/* Default Redirect */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+
+        <Route path="*" element={<Navigate to="/student/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   );
