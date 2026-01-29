@@ -7,6 +7,8 @@ import CreateTicket from "./pages/student/CreateTicket";
 // import TrackingPage... (ถ้าคุณทำแล้ว)
 import StaffDashboard from "./pages/staff/Dashboard";
 import ReviewTicket from "./pages/staff/ReviewTicket";
+import Verification from "./pages/admin/Verification";
+import VotingControl from "./pages/admin/VotingControl";
 
 function App() {
   return (
@@ -33,7 +35,12 @@ function App() {
 
         {/* --- ADMIN ROUTES (ทำทีหลัง) --- */}
         <Route path="/admin" element={<Layout role="ADMIN" />}>
-          <Route path="dashboard" element={<h1>Admin Dashboard</h1>} />
+          <Route path="dashboard" element={<Verification />} />{" "}
+          {/* ให้หน้าแรกเป็น Verification ไปก่อน */}
+          <Route path="verification" element={<Verification />} />
+          <Route path="voting" element={<VotingControl />} />
+          <Route path="reports" element={<h1>Reports Page (Coming Soon)</h1>} />
+          <Route index element={<Navigate to="verification" replace />} />
         </Route>
 
         <Route
