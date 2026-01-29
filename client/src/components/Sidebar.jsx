@@ -1,9 +1,18 @@
 import React from 'react';
 import { Home, FileText, CheckSquare, Users, BarChart, LogOut, Settings } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom'; // เพิ่ม useNavigate
+import { useAuth } from '../context/AuthContext'; // ✅ 1. Import AuthContext
 
 const Sidebar = ({ role = 'STUDENT' }) => {
   const location = useLocation();
+  const navigate = useNavigate(); // ใช้สำหรับย้ายหน้า
+  const { logout } = useAuth();   // ✅ 2. ดึงฟังก์ชัน logout มาใช้
+
+  // ฟังก์ชันกดแล้วออกระบบ
+  const handleLogout = () => {
+    logout(); // เคลียร์ user เป็น null
+    navigate('/login'); // ดีดกลับไปหน้า Login
+  };
 
   // กำหนดเมนูตาม Role
   const menus = {
@@ -13,7 +22,7 @@ const Sidebar = ({ role = 'STUDENT' }) => {
       { name: 'Tracking', icon: BarChart, path: '/student/tracking' },
       { name: 'History', icon: CheckSquare, path: '/student/history' },
     ],
-    STAFF: [
+    STAFF: [ // รวม Staff, SubDean, Dean
       { name: 'Dashboard', icon: Home, path: '/staff/dashboard' },
       { name: 'Pending Reviews', icon: FileText, path: '/staff/reviews' },
       { name: 'History', icon: CheckSquare, path: '/staff/history' },
@@ -25,8 +34,11 @@ const Sidebar = ({ role = 'STUDENT' }) => {
       { name: 'Reports', icon: FileText, path: '/admin/reports' },
     ],
     COMMITTEE: [
-      { name: 'Dashboard', icon: Home, path: '/committee/dashboard' },
+      { name: 'Dashboard', icon: Home, path: '/committee/vote' },
       { name: 'Vote Candidates', icon: Users, path: '/committee/vote' },
+    ],
+    PRESIDENT: [
+       { name: 'Proclamation', icon: FileText, path: '/president/proclaim' }
     ]
   };
 
@@ -62,11 +74,16 @@ const Sidebar = ({ role = 'STUDENT' }) => {
 
       {/* Footer */}
       <div className="p-4 border-t border-white/10 space-y-2">
-        <Link to="/settings" className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-white/5 text-sm text-green-200">
+        <button className="flex items-center gap-3 px-4 py-2 w-full text-left rounded-lg hover:bg-white/5 text-sm text-green-200 transition-colors">
             <Settings size={18} />
             <span>Settings</span>
-        </Link>
-        <button className="flex items-center gap-3 px-4 py-2 w-full text-left rounded-lg hover:bg-red-500/20 text-red-200 hover:text-red-100 transition-colors text-sm">
+        </button>
+        
+        {/* ✅ 3. ผูกปุ่ม Logout กับฟังก์ชัน */}
+        <button 
+          onClick={handleLogout} 
+          className="flex items-center gap-3 px-4 py-2 w-full text-left rounded-lg hover:bg-red-500/20 text-red-200 hover:text-red-100 transition-colors text-sm"
+        >
           <LogOut size={18} />
           <span>Log Out</span>
         </button>

@@ -1,36 +1,107 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import StudentTracking from './pages/student/Tracking';
+
+// --- Context & Guards ---
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+
+// --- Components ---
 import Layout from './components/Layout';
 
-// Mock Pages (สร้างหน้าเปล่าๆ ไว้ทดสอบก่อน)
-const Dashboard = () => <h1 className="text-3xl font-bold text-ku-main">Student Dashboard</h1>;
-const Tracking = () => <div className="p-6 bg-white rounded-xl shadow"><h2 className="text-xl mb-4">Status Tracking</h2><StatusTimeline currentStatus="dev_review" /></div>;
-// import StatusTimeline ต้อง import มาด้วยนะถ้าจะใช้
+// --- Pages: Auth ---
+import Login from './pages/Login';
+
+// --- Pages: Student ---
+import StudentDashboard from './pages/student/Dashboard';
+import CreateTicket from './pages/student/CreateTicket';
+// import StudentTracking from './pages/student/Tracking'; // (ถ้ามี)
+
+// --- Pages: Staff/Executive ---
+import StaffDashboard from './pages/staff/Dashboard';
+import ReviewTicket from './pages/staff/ReviewTicket';
+
+// --- Pages: Admin ---
+import Verification from './pages/admin/Verification';
+import VotingControl from './pages/admin/VotingControl';
+
+// --- Pages: Committee ---
+import VotingBallot from './pages/committee/VotingBallot';
+import Proclamation from './pages/committee/Proclamation';
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* หน้า Login (แยก Layout) */}
-        <Route path="/login" element={<div>Login Page</div>} />
+    <AuthProvider>
+      <BrowserRouter>
+        {/* Toast Notification Position */}
+        <Toaster position="top-right" />
 
-        {/* Student Routes */}
-        <Route path="/student" element={<Layout role="STUDENT" />}>
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="tracking" element={<Tracking />} />
-          {/* Redirect default path */}
-          <Route index element={<Navigate to="dashboard" replace />} />
-        </Route>
+        <Routes>
+          {/* Public Route */}
+          <Route path="/login" element={<Login />} />
 
-        {/* Admin Routes */}
-        <Route path="/admin" element={<Layout role="ADMIN" />}>
-          <Route path="dashboard" element={<h1>Admin Dashboard</h1>} />
-        </Route>
-        
-        {/* Default Redirect */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* ================= STUDENT ROUTES ================= */}
+          <Route path="/student" element={
+            <ProtectedRoute allowedRoles={['STUDENT']}>
+              <Layout role="STUDENT" />
+            </ProtectedRoute>
+          }>
+            <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="create" element={<CreateTicket />} />
+            <Route path="tracking" element={<StudentTracking />} />
+            <Route index element={<Navigate to="dashboard" replace />} />
+          </Route>
+
+          {/* ================= STAFF/DEAN ROUTES ================= */}
+          <Route path="/staff" element={
+            <ProtectedRoute allowedRoles={['STAFF', 'SUB_DEAN', 'DEAN']}>
+              <Layout role="STAFF" />
+            </ProtectedRoute>
+          }>
+            <Route path="dashboard" element={<StaffDashboard />} />
+            <Route path="reviews" element={<StaffDashboard />} />
+            <Route path="review/:id" element={<ReviewTicket />} />
+            <Route index element={<Navigate to="dashboard" replace />} />
+          </Route>
+
+          {/* ================= ADMIN ROUTES ================= */}
+          <Route path="/admin" element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Layout role="ADMIN" />
+            </ProtectedRoute>
+          }>
+            <Route path="verification" element={<Verification />} />
+            <Route path="voting" element={<VotingControl />} />
+            <Route index element={<Navigate to="verification" replace />} />
+          </Route>
+
+          {/* ================= COMMITTEE ROUTES ================= */}
+          <Route path="/committee" element={
+            <ProtectedRoute allowedRoles={['COMMITTEE', 'PRESIDENT']}>
+              <Layout role="COMMITTEE" />
+            </ProtectedRoute>
+          }>
+            <Route path="vote" element={<VotingBallot />} />
+            <Route path="dashboard" element={<Navigate to="vote" replace />} />
+            <Route index element={<Navigate to="vote" replace />} />
+          </Route>
+
+           {/* ================= PRESIDENT ROUTES ================= */}
+           {/* ประธานใช้ Layout ของ Committee แต่มีหน้าพิเศษเพิ่ม */}
+           <Route path="/president" element={
+            <ProtectedRoute allowedRoles={['PRESIDENT']}>
+              <Layout role="COMMITTEE" />
+            </ProtectedRoute>
+          }>
+            <Route path="proclaim" element={<Proclamation />} />
+          </Route>
+
+          {/* Default Redirect: ถ้าเข้า Path มั่ว ให้ไป Login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
