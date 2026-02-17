@@ -74,7 +74,6 @@ const Verification = () => {
                     >
                         <option value="Academic">Academic</option>
                         <option value="Innovation">Innovation</option>
-                        <option value="Sports">Sports</option>
                         <option value="Activity">Activity</option>
                     </select>
                   ) : (
