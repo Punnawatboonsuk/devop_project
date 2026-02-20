@@ -73,16 +73,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_votes_count_insert ON votes;
 CREATE TRIGGER update_votes_count_insert
     AFTER INSERT ON votes
     FOR EACH ROW
     EXECUTE FUNCTION update_ticket_vote_count();
 
+DROP TRIGGER IF EXISTS update_votes_count_update ON votes;
 CREATE TRIGGER update_votes_count_update
     AFTER UPDATE ON votes
     FOR EACH ROW
     EXECUTE FUNCTION update_ticket_vote_count();
 
+DROP TRIGGER IF EXISTS update_votes_count_delete ON votes;
 CREATE TRIGGER update_votes_count_delete
     AFTER DELETE ON votes
     FOR EACH ROW
@@ -147,6 +150,7 @@ CREATE TABLE IF NOT EXISTS certificates (
 CREATE INDEX IF NOT EXISTS idx_certificates_ticket_id ON certificates(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_certificates_status ON certificates(status);
 
+DROP TRIGGER IF EXISTS update_certificates_updated_at ON certificates;
 CREATE TRIGGER update_certificates_updated_at
     BEFORE UPDATE ON certificates
     FOR EACH ROW

@@ -57,7 +57,8 @@ CREATE INDEX IF NOT EXISTS idx_tickets_award_type ON tickets(award_type);
 CREATE INDEX IF NOT EXISTS idx_tickets_academic_year ON tickets(academic_year, semester);
 CREATE INDEX IF NOT EXISTS idx_tickets_form_data ON tickets USING GIN (form_data);
 
--- สร้าง trigger
+-- ลบ trigger เก่าก่อน
+DROP TRIGGER IF EXISTS update_tickets_updated_at ON tickets;
 CREATE TRIGGER update_tickets_updated_at
     BEFORE UPDATE ON tickets
     FOR EACH ROW

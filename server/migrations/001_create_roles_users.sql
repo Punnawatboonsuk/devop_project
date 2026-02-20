@@ -59,7 +59,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- สร้าง trigger
+-- ลบ trigger เก่าก่อน แล้วสร้างใหม่
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users
     FOR EACH ROW
