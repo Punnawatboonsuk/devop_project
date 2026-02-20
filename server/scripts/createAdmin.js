@@ -5,8 +5,8 @@
 
 const readline = require('readline');
 require('dotenv').config();
-const { pool, transaction } = require('../config/database');
-const { hashpw, gensalt } = require('../utils/ripcrypt');
+const { pool, transaction } = require('../src/config/database');
+const { hashpw, gensalt } = require('../src/utils/ripcrypt');
 
 const rl = readline.createInterface({
   input: process.stdin,

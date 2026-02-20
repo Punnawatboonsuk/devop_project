@@ -6,7 +6,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 require('dotenv').config();
-const { pool } = require('../config/database');
+const { pool } = require('../src/config/database');
 
 async function runMigrations() {
   console.log('🚀 Starting database migrations...\n');
