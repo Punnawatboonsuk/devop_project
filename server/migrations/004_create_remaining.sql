@@ -1,5 +1,6 @@
 -- Migration 004: Files, Votes, Logs, Certificates
 
+-- Ticket Files
 CREATE TABLE IF NOT EXISTS ticket_files (
     id SERIAL PRIMARY KEY,
     ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
@@ -15,10 +16,15 @@ CREATE TABLE IF NOT EXISTS ticket_files (
     deleted_by INTEGER REFERENCES users(id)
 );
 
-CREATE INDEX idx_ticket_files_ticket_id ON ticket_files(ticket_id);
-CREATE INDEX idx_ticket_files_active ON ticket_files(ticket_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_ticket_files_ticket_id ON ticket_files(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_files_active ON ticket_files(ticket_id) WHERE deleted_at IS NULL;
 
-CREATE TYPE vote_choice AS ENUM ('approved', 'not_approved');
+-- Votes
+DO $$ BEGIN
+    CREATE TYPE vote_choice AS ENUM ('approved', 'not_approved');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 CREATE TABLE IF NOT EXISTS votes (
     id SERIAL PRIMARY KEY,
@@ -31,41 +37,70 @@ CREATE TABLE IF NOT EXISTS votes (
     UNIQUE(ticket_id, user_id)
 );
 
-CREATE INDEX idx_votes_ticket_id ON votes(ticket_id);
-CREATE INDEX idx_votes_user_id ON votes(user_id);
+CREATE INDEX IF NOT EXISTS idx_votes_ticket_id ON votes(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_votes_user_id ON votes(user_id);
 
+-- Trigger เพื่อ auto-update vote counts
 CREATE OR REPLACE FUNCTION update_ticket_vote_count()
-RETURNS TRIGGER AS \$\$
+RETURNS TRIGGER AS $$
 BEGIN
     UPDATE tickets
     SET 
-        total_votes = (SELECT COUNT(*) FROM votes WHERE ticket_id = COALESCE(NEW.ticket_id, OLD.ticket_id)),
-        approved_votes = (SELECT COUNT(*) FROM votes WHERE ticket_id = COALESCE(NEW.ticket_id, OLD.ticket_id) AND vote = 'approved'),
+        total_votes = (
+            SELECT COUNT(*) 
+            FROM votes 
+            WHERE ticket_id = COALESCE(NEW.ticket_id, OLD.ticket_id)
+        ),
+        approved_votes = (
+            SELECT COUNT(*) 
+            FROM votes 
+            WHERE ticket_id = COALESCE(NEW.ticket_id, OLD.ticket_id) 
+            AND vote = 'approved'
+        ),
         vote_percentage = (
-            SELECT CASE WHEN COUNT(*) = 0 THEN 0
-                   ELSE ROUND((COUNT(*) FILTER (WHERE vote = 'approved') * 100.0 / COUNT(*)), 2)
-                   END
-            FROM votes WHERE ticket_id = COALESCE(NEW.ticket_id, OLD.ticket_id)
+            SELECT 
+                CASE 
+                    WHEN COUNT(*) = 0 THEN 0
+                    ELSE ROUND((COUNT(*) FILTER (WHERE vote = 'approved') * 100.0 / COUNT(*)), 2)
+                END
+            FROM votes 
+            WHERE ticket_id = COALESCE(NEW.ticket_id, OLD.ticket_id)
         ),
         updated_at = CURRENT_TIMESTAMP
     WHERE id = COALESCE(NEW.ticket_id, OLD.ticket_id);
+    
     RETURN COALESCE(NEW, OLD);
 END;
-\$\$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_votes_count_insert AFTER INSERT ON votes
-    FOR EACH ROW EXECUTE FUNCTION update_ticket_vote_count();
-CREATE TRIGGER update_votes_count_update AFTER UPDATE ON votes
-    FOR EACH ROW EXECUTE FUNCTION update_ticket_vote_count();
-CREATE TRIGGER update_votes_count_delete AFTER DELETE ON votes
-    FOR EACH ROW EXECUTE FUNCTION update_ticket_vote_count();
+CREATE TRIGGER update_votes_count_insert
+    AFTER INSERT ON votes
+    FOR EACH ROW
+    EXECUTE FUNCTION update_ticket_vote_count();
 
-CREATE TYPE log_action AS ENUM (
-    'user_login', 'user_logout', 'user_register', 'ticket_create', 'ticket_update',
-    'ticket_accept', 'ticket_reject', 'ticket_expire', 'vote_submit', 'vote_update',
-    'phase_change', 'file_upload', 'file_delete', 'certificate_generate',
-    'certificate_sign', 'certificate_publish', 'admin_action'
-);
+CREATE TRIGGER update_votes_count_update
+    AFTER UPDATE ON votes
+    FOR EACH ROW
+    EXECUTE FUNCTION update_ticket_vote_count();
+
+CREATE TRIGGER update_votes_count_delete
+    AFTER DELETE ON votes
+    FOR EACH ROW
+    EXECUTE FUNCTION update_ticket_vote_count();
+
+-- Audit Logs
+DO $$ BEGIN
+    CREATE TYPE log_action AS ENUM (
+        'user_login', 'user_logout', 'user_register',
+        'ticket_create', 'ticket_update', 'ticket_accept', 'ticket_reject', 'ticket_expire',
+        'vote_submit', 'vote_update', 'phase_change',
+        'file_upload', 'file_delete',
+        'certificate_generate', 'certificate_sign', 'certificate_publish',
+        'admin_action'
+    );
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
@@ -81,11 +116,16 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
-CREATE INDEX idx_audit_logs_action ON audit_logs(action);
-CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
 
-CREATE TYPE certificate_status AS ENUM ('draft', 'signed', 'published');
+-- Certificates
+DO $$ BEGIN
+    CREATE TYPE certificate_status AS ENUM ('draft', 'signed', 'published');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 CREATE TABLE IF NOT EXISTS certificates (
     id SERIAL PRIMARY KEY,
@@ -104,7 +144,10 @@ CREATE TABLE IF NOT EXISTS certificates (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_certificates_ticket_id ON certificates(ticket_id);
-CREATE INDEX idx_certificates_status ON certificates(status);
-CREATE TRIGGER update_certificates_updated_at BEFORE UPDATE ON certificates
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE INDEX IF NOT EXISTS idx_certificates_ticket_id ON certificates(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_certificates_status ON certificates(status);
+
+CREATE TRIGGER update_certificates_updated_at
+    BEFORE UPDATE ON certificates
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();

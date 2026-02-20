@@ -1,4 +1,6 @@
 -- Migration 001: Roles & Users with Multi-Role Support
+
+-- สร้าง roles table
 CREATE TABLE IF NOT EXISTS roles (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) UNIQUE NOT NULL,
@@ -6,6 +8,7 @@ CREATE TABLE IF NOT EXISTS roles (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Insert 7 default roles
 INSERT INTO roles (name, description) VALUES
 ('STUDENT', 'นิสิตที่สามารถสมัครเข้าร่วมการคัดเลือก'),
 ('STAFF', 'เจ้าหน้าที่ที่ตรวจสอบและรับรองเอกสาร'),
@@ -16,6 +19,7 @@ INSERT INTO roles (name, description) VALUES
 ('ADMIN', 'ผู้ดูแลระบบที่ควบคุมทุกอย่าง')
 ON CONFLICT (name) DO NOTHING;
 
+-- สร้าง users table
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     ku_id VARCHAR(20),
@@ -27,10 +31,10 @@ CREATE TABLE IF NOT EXISTS users (
     sso_enabled BOOLEAN DEFAULT false,
     last_login TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT valid_email CHECK (email ~* '^[A-Za-z0-9._%+-]+@(ku\.th|live\.ku\.th)$')
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- สร้าง user_roles table (many-to-many)
 CREATE TABLE IF NOT EXISTS user_roles (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -40,17 +44,23 @@ CREATE TABLE IF NOT EXISTS user_roles (
     UNIQUE(user_id, role_id)
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
-CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
+-- สร้าง indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_ku_id ON users(ku_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role_id ON user_roles(role_id);
 
+-- สร้าง function สำหรับ auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS \$\$
+RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
-\$\$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- สร้าง trigger
+CREATE TRIGGER update_users_updated_at
+    BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
