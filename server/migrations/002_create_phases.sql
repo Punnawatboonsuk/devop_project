@@ -34,7 +34,8 @@ ON CONFLICT (phase) DO NOTHING;
 -- สร้าง index
 CREATE INDEX IF NOT EXISTS idx_phases_active ON phases(is_active) WHERE is_active = true;
 
--- สร้าง trigger
+-- ลบ trigger เก่าก่อน
+DROP TRIGGER IF EXISTS update_phases_updated_at ON phases;
 CREATE TRIGGER update_phases_updated_at
     BEFORE UPDATE ON phases
     FOR EACH ROW
