@@ -7,7 +7,12 @@
     "start": "node server.js",
     "dev": "NODE_ENV=development node server.js",
     "migrate": "node scripts/migrate.js",
-    "create-admin": "node scripts/createAdmin.js"
+    "create-admin": "node scripts/createAdmin.js",
+    "create-staff": "node scripts/createStaff.js",
+    "create-sub-dean": "node scripts/createSubDean.js",
+    "create-dean": "node scripts/createDean.js",
+    "create-committee": "node scripts/createCommittee.js",
+    "create-committee-president": "node scripts/createCommitteePresident.js"
   },
   "keywords": [
     "ku",

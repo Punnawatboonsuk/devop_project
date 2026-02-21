@@ -1,7 +1,7 @@
 import React from 'react';
 import { Home, FileText, CheckSquare, Users, BarChart, LogOut, Settings } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom'; // เพิ่ม useNavigate
-import { useAuth } from '../context/AuthContext'; // ✅ 1. Import AuthContext
+import { useAuth } from '../hooks/useAuth'; // ✅ 1. Import AuthContext
 
 const Sidebar = ({ role = 'STUDENT' }) => {
   const location = useLocation();
@@ -34,8 +34,9 @@ const Sidebar = ({ role = 'STUDENT' }) => {
       { name: 'Reports', icon: FileText, path: '/admin/reports' },
     ],
     COMMITTEE: [
-      { name: 'Dashboard', icon: Home, path: '/committee/vote' },
-      { name: 'Vote Candidates', icon: Users, path: '/committee/vote' },
+      { name: 'Dashboard', icon: Home, path: '/committee/dashboard' },
+      { name: 'Proclamation', icon: FileText, path: '/committee/proclamation' },
+      { name: 'Candidates', icon: Users, path: '/committee/candidates' },
     ],
     PRESIDENT: [
        { name: 'Proclamation', icon: FileText, path: '/president/proclaim' }

@@ -12,6 +12,7 @@ import Layout from './components/Layout';
 
 // --- Pages: Auth ---
 import Login from './pages/Login';
+import Register from './pages/Register';
 
 // --- Pages: Student ---
 import StudentDashboard from './pages/student/Dashboard';
@@ -29,6 +30,8 @@ import VotingControl from './pages/admin/VotingControl';
 // --- Pages: Committee ---
 import VotingBallot from './pages/committee/VotingBallot';
 import Proclamation from './pages/committee/Proclamation';
+import CommitteeDashboard from './pages/committee/Dashboard';
+import CommitteeCandidates from './pages/committee/Candidates';
 
 function App() {
   return (
@@ -40,6 +43,7 @@ function App() {
         <Routes>
           {/* Public Route */}
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
           {/* ================= STUDENT ROUTES ================= */}
           <Route path="/student" element={
@@ -83,8 +87,11 @@ function App() {
             </ProtectedRoute>
           }>
             <Route path="vote" element={<VotingBallot />} />
-            <Route path="dashboard" element={<Navigate to="vote" replace />} />
-            <Route index element={<Navigate to="vote" replace />} />
+            <Route path="vote/:id" element={<VotingBallot />} />
+            <Route path="dashboard" element={<CommitteeDashboard />} />
+            <Route path="candidates" element={<CommitteeCandidates />} />
+            <Route path="proclamation" element={<Proclamation />} />
+            <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
            {/* ================= PRESIDENT ROUTES ================= */}

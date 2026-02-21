@@ -1,60 +1,165 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { authenticatedApiRequest } from '../utils/api';
 
 const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-  // ✅ 1. เริ่มต้นเป็น null (เพื่อไม่ให้ Login ค้าง)
+export { AuthContext };
+
+const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = (usernameInput, password) => {
-    // ปรับให้เป็นตัวพิมพ์เล็กทั้งหมดก่อนเช็ค และตัดช่องว่างหน้าหลัง
-    const username = usernameInput.toLowerCase().trim();
+  // Check if user is already logged in on app start
+  useEffect(() => {
+    getCurrentUser();
+  }, []);
 
-    console.log("Attempting Login with:", username); // เช็คใน Console (F12)
-
-    if (username === 'student') {
-      setUser({ name: 'Nattapong S.', role: 'STUDENT', id: '643xxxxx' });
-      toast.success('Login Success: Student');
-      return true;
-    } 
-    else if (username === 'staff') {
-      setUser({ name: 'Dr. Somsak', role: 'STAFF', id: 'st001' });
-      toast.success('Login Success: Staff');
-      return true;
-    }
-    else if (username === 'admin') {
-      setUser({ name: 'Admin Officer', role: 'ADMIN', id: 'ad001' });
-      toast.success('Login Success: Admin');
-      return true;
-    }
-    else if (username === 'committee') {
-      setUser({ name: 'Prof. Somchai', role: 'COMMITTEE', id: 'cm001' });
-      toast.success('Login Success: Committee');
-      return true;
-    }
-    else if (username === 'president') {
-      setUser({ name: 'President', role: 'PRESIDENT', id: 'pr001' });
-      toast.success('Login Success: President');
-      return true;
-    }
-    else {
-      console.log("Login Failed");
-      toast.error('User not found (Try: student, staff, admin)');
-      return false;
+  // Get current user from API
+  const getCurrentUser = async () => {
+    try {
+      const response = await authenticatedApiRequest('/api/auth/me');
+      
+      // Handle 401 explicitly without redirect
+      if (response.status === 401) {
+        setUser(null);
+        return;
+      }
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.authenticated) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    toast.success('Logged out');
+  // Login with email and password
+  const login = async (email, password) => {
+    setLoading(true);
+    try {
+      const response = await authenticatedApiRequest('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUser(data.user);
+        toast.success('Login successful');
+        return { success: true, redirect: data.redirect };
+      } else {
+        toast.error(data.message || 'Login failed');
+        return { success: false, message: data.message };
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error('Network error. Please try again.');
+      return { success: false, message: 'Network error' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Register new user
+  const register = async (userData) => {
+    setLoading(true);
+    try {
+      const response = await authenticatedApiRequest('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Registration successful! Please login.');
+        return { success: true };
+      } else {
+        toast.error(data.message || 'Registration failed');
+        return { success: false, message: data.message };
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      toast.error('Network error. Please try again.');
+      return { success: false, message: 'Network error' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Logout user
+  const logout = async () => {
+    try {
+      await authenticatedApiRequest('/api/auth/logout', {
+        method: 'POST',
+      });
+      setUser(null);
+      toast.success('Logged out successfully');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Logout failed');
+    }
+  };
+
+  // Change password
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      const response = await authenticatedApiRequest('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Password changed successfully');
+        return { success: true };
+      } else {
+        toast.error(data.message || 'Failed to change password');
+        return { success: false, message: data.message };
+      }
+    } catch (error) {
+      console.error('Change password error:', error);
+      toast.error('Network error. Please try again.');
+      return { success: false, message: 'Network error' };
+    }
+  };
+
+  const value = {
+    user,
+    loading,
+    login,
+    logout,
+    register,
+    changePassword,
+    getCurrentUser,
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 };
-
-export const useAuth = () => useContext(AuthContext);
+export { AuthProvider };
