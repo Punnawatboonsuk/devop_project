@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import StudentTracking from './pages/student/Tracking';
 
 // --- Context & Guards ---
 import { AuthProvider } from './context/AuthContext';
@@ -16,11 +15,12 @@ import Login from './pages/Login';
 // --- Pages: Student ---
 import StudentDashboard from './pages/student/Dashboard';
 import CreateTicket from './pages/student/CreateTicket';
-// import StudentTracking from './pages/student/Tracking'; // (ถ้ามี)
+import StudentTracking from './pages/student/Tracking';
 
 // --- Pages: Staff/Executive ---
-import StaffDashboard from './pages/staff/Dashboard';
+import StaffDashboard from './pages/staff/StaffDashboard';
 import ReviewTicket from './pages/staff/ReviewTicket';
+import StaffHistory from './pages/staff/History'; // ✅ เพิ่มบรรทัดนี้ครับ
 
 // --- Pages: Admin ---
 import Verification from './pages/admin/Verification';
@@ -62,6 +62,7 @@ function App() {
             <Route path="dashboard" element={<StaffDashboard />} />
             <Route path="reviews" element={<StaffDashboard />} />
             <Route path="review/:id" element={<ReviewTicket />} />
+            <Route path="history" element={<StaffHistory />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
