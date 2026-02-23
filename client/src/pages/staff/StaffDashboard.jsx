@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Filter, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import StatusBadge from '../../components/StatusBadge';
 
 const StaffDashboard = () => {

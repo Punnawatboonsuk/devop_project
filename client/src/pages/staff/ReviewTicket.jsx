@@ -10,7 +10,7 @@ import {
   Download,
   AlertTriangle
 } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import ActionModal from '../../components/ActionModal';
 import StudentHistory from '../../components/StudentHistory';
 import toast from 'react-hot-toast';
