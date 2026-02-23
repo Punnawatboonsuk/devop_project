@@ -11,6 +11,7 @@ const path = require('path');
 
 // Configuration
 const sessionConfig = require('./src/config/session');
+const passport = require('./src/config/passport');
 
 // Routes
 const authRoutes = require('./src/routes/auth');
@@ -61,6 +62,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Session
 app.use(session(sessionConfig));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

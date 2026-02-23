@@ -146,6 +146,27 @@ const AuthProvider = ({ children }) => {
     }
   };
 
+  // Handle Google OAuth callback
+  const handleGoogleCallback = async () => {
+    try {
+      const response = await authenticatedApiRequest('/api/auth/google-callback');
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setUser(data.user);
+        toast.success('Google SSO login successful');
+        return { success: true, redirect: data.redirect };
+      } else {
+        toast.error(data.message || 'Google authentication failed');
+        return { success: false, message: data.message };
+      }
+    } catch (error) {
+      console.error('Google callback error:', error);
+      toast.error('Network error. Please try again.');
+      return { success: false, message: 'Network error' };
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -154,6 +175,7 @@ const AuthProvider = ({ children }) => {
     register,
     changePassword,
     getCurrentUser,
+    handleGoogleCallback,
   };
 
   return (

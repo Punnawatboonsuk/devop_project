@@ -50,16 +50,17 @@ const Proclamation = () => {
   };
 
   return (
-    <div className={`space-y-8 relative ${showHistory ? 'overflow-hidden' : ''}`}> 
-      <div className="flex justify-between items-end">
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black text-gray-800 tracking-tight">Final Proclamation</h1>
+          <h1 className="text-2xl font-bold text-ku-main">Final Proclamation</h1>
           <p className="text-gray-500">Sign and announce the official "Nisit Deeden" for Semester 1/2024.</p>
         </div>
         <div className="flex gap-2">
           <button 
             onClick={handleSignAndAnnounce}
-            className="bg-ku-main text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-xl hover:bg-green-800 transition transform active:scale-95"
+            className="bg-ku-main text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-xl hover:bg-green-800 transition transform active:scale-95"
           >
             <FileCheck size={20} /> Sign & Announce Results
           </button>
@@ -73,8 +74,8 @@ const Proclamation = () => {
       </div>
 
       {/* Winners Summary Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
             <h3 className="font-bold text-gray-700">Verified Winners List</h3>
             <div className="flex gap-2">
                 <button className="p-2 text-gray-500 hover:bg-white rounded border border-gray-200"><Download size={18} /></button>

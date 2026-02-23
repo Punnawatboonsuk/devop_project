@@ -40,9 +40,13 @@ const VotingBallot = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto pb-10">
-      {/* Top Header */}
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-8">
+      {/* Header Section */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-ku-main">Voting Ballot</h1>
+          <p className="text-gray-500">Review candidate information and cast your vote</p>
+        </div>
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-500 hover:text-ku-main">
           <span className="font-bold">&#8592;</span> Back to Candidates
         </button>
@@ -52,7 +56,7 @@ const VotingBallot = () => {
         {/* Profile & Achievements */}
         <div className="lg:col-span-2 space-y-6">
           {/* Profile Card */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-center gap-8">
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row items-center gap-8">
             <div className="w-32 h-32 bg-gray-200 rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
               {candidate.avatar ? (
                 <img src={candidate.avatar} alt={candidate.name} className="w-full h-full object-cover" />
@@ -61,7 +65,7 @@ const VotingBallot = () => {
               )}
             </div>
             <div className="flex-1">
-              <h1 className="text-3xl font-black text-gray-900 mb-2">{candidate.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-800 mb-2">{candidate.name}</h1>
               <div className="flex flex-wrap gap-2 mb-2">
                 <span className="bg-gray-100 px-3 py-1 rounded-full text-sm font-medium text-gray-700 flex items-center gap-1">
                   Faculty of {candidate.faculty}
@@ -75,7 +79,7 @@ const VotingBallot = () => {
           </div>
 
           {/* Achievements */}
-          <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
             <h3 className="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
               <Star size={20} className="text-ku-accent fill-ku-accent" /> Key Achievements
             </h3>
@@ -94,18 +98,18 @@ const VotingBallot = () => {
         <div className="lg:col-span-1 space-y-6">
           {/* GPA & Activities */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white rounded-2xl p-6 flex flex-col items-center justify-center border border-gray-100">
+            <div className="bg-white rounded-xl p-6 flex flex-col items-center justify-center border border-gray-100">
               <div className="text-xs text-gray-500 mb-1">Current GPA</div>
-              <div className="text-3xl font-bold text-green-700 flex items-center gap-1">{candidate.gpa}</div>
+              <div className="text-2xl font-bold text-green-700 flex items-center gap-1">{candidate.gpa}</div>
             </div>
-            <div className="bg-white rounded-2xl p-6 flex flex-col items-center justify-center border border-gray-100">
+            <div className="bg-white rounded-xl p-6 flex flex-col items-center justify-center border border-gray-100">
               <div className="text-xs text-gray-500 mb-1">Activities Score</div>
-              <div className="text-3xl font-bold text-orange-600 flex items-center gap-1">{candidate.activitiesScore}<span className="text-base">/100</span></div>
+              <div className="text-2xl font-bold text-orange-600 flex items-center gap-1">{candidate.activitiesScore}<span className="text-sm">/100</span></div>
             </div>
           </div>
 
           {/* Evidence */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-100">
+          <div className="bg-white rounded-xl p-6 border border-gray-100">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-bold text-gray-800 flex items-center gap-2"><FileText size={18} /> Evidence</h3>
             </div>
@@ -120,7 +124,7 @@ const VotingBallot = () => {
           </div>
 
           {/* Voting Actions */}
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 flex flex-col gap-4">
+          <div className="bg-white rounded-xl p-6 border border-gray-100 flex flex-col gap-4">
             <div className="flex gap-2">
               <button
                 className={`flex-1 py-3 rounded-lg font-bold border ${voted === 'reject' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}

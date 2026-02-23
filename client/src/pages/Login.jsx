@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { FaUser, FaLock } from 'react-icons/fa';
+import { FaUser, FaLock, FaGoogle } from 'react-icons/fa';
+import KULogo from '../assets/KU_Logo_PNG.png';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -41,11 +42,11 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-[#f7faf7] relative">
       {/* Top left logo and university name */}
       <div className="absolute top-6 left-8 flex items-center">
-        <div className="w-8 h-8 bg-[#1a7f42] rounded-full flex items-center justify-center mr-2">
-          {/* Placeholder for KU logo */}
-          <span className="text-white font-bold text-lg">K</span>
+        <img src={KULogo} alt="KU Logo" className="w-12 h-12 mr-3" />
+        <div>
+          <span className="text-[#1a7f42] font-bold text-xl">Kasetsart University</span>
+          <div className="text-[#1a7f42] text-sm opacity-80">Faculty of Science</div>
         </div>
-        <span className="text-[#1a7f42] font-semibold text-lg">Kasetsart University</span>
       </div>
 
       {/* Language switcher */}
@@ -54,20 +55,20 @@ const Login = () => {
       {/* Login Card */}
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md flex flex-col items-center">
         {/* KU SSO Logo */}
-        <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4 shadow">
-          <span className="text-xl font-bold text-[#1a7f42]">KU</span>
+        <div className="mb-4">
+          <img src={KULogo} alt="KU Logo" className="w-24 h-26" />
         </div>
-        <h2 className="text-xl font-bold text-gray-800 mb-1 text-center">KU SSO Login</h2>
-        <p className="text-green-700 text-sm text-center mb-1">Sign in to access<br /><span className="font-semibold text-green-800">Nisit Deeden Award System</span></p>
+        <h2 className="text-xl font-bold text-green-800 mb-1 text-center">Nisit Deeden Award System</h2>
+        <p className="text-black-700 text-sm text-center mb-4"><br /><span className="font-semibold text-grey-800">KU SSO Login</span></p>
 
-        <form onSubmit={handleLogin} className="w-full mt-4">
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nontri Account</label>
+        <form onSubmit={handleLogin} className="w-full mt-2">
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">KU Email</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><FaUser /></span>
-              <input
+            <input
                 type="text"
-                placeholder="e.g. b64xxxxxxxx"
+                placeholder="e.g. example@ku.th"
                 className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1a7f42]"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -76,7 +77,7 @@ const Login = () => {
               />
             </div>
           </div>
-          <div className="mb-2">
+          <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><FaLock /></span>
@@ -92,15 +93,27 @@ const Login = () => {
             </div>
           </div>
           {error && <div className="text-red-500 text-sm mb-2">{error}</div>}
-          <button type="submit" className="w-full bg-[#1a7f42] text-white py-2 rounded-lg font-bold mt-2 hover:bg-green-900 transition disabled:opacity-50 disabled:cursor-not-allowed" disabled={loading}>
+          <button type="submit" className="w-full bg-gradient-to-r from-[#1a7f42] to-[#2d9e5a] text-white py-3 rounded-lg font-bold mt-4 hover:from-[#166a37] hover:to-[#25824a] transition-all duration-300 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled={loading}>
             {loading ? "Signing In..." : "Sign In"} <span className="ml-1">→</span>
+          </button>
+          
+          {/* Google OAuth Button */}
+          <button
+            onClick={() => {
+              // Redirect to Google OAuth with callback to frontend
+              window.location.href = `/api/auth/google-login?redirect=${encodeURIComponent('/auth/google-callback')}`;
+            }}
+            className="w-full mt-4 bg-white text-gray-700 py-3 rounded-lg font-bold border-2 border-gray-300 hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 flex items-center justify-center"
+          >
+            <FaGoogle className="mr-2 text-red-500" />
+            Login with Google (KU Email Only)
           </button>
         </form>
         <button
           onClick={() => navigate('/register')}
-          className="w-full mt-2 bg-gray-200 text-[#1a7f42] py-2 rounded-lg font-bold hover:bg-gray-300 transition"
+          className="w-full mt-4 bg-white text-[#1a7f42] py-3 rounded-lg font-bold border-2 border-[#1a7f42] hover:bg-[#1a7f42] hover:text-white transition-all duration-300 transform hover:scale-105"
         >Register as Student</button>
-        <div className="text-xs text-gray-400 mt-4 text-center">Need help logging in?</div>
+        <div className="text-xs text-gray-500 mt-6 text-center">Need help logging in? <span className="text-[#1a7f42] font-medium cursor-pointer hover:underline">Contact IT Support</span></div>
       </div>
 
       {/* Footer */}

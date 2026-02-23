@@ -13,6 +13,7 @@ import Layout from './components/Layout';
 // --- Pages: Auth ---
 import Login from './pages/Login';
 import Register from './pages/Register';
+import GoogleCallback from './pages/GoogleCallback';
 
 // --- Pages: Student ---
 import StudentDashboard from './pages/student/Dashboard';
@@ -44,6 +45,7 @@ function App() {
           {/* Public Route */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/auth/google-callback" element={<GoogleCallback />} />
 
           {/* ================= STUDENT ROUTES ================= */}
           <Route path="/student" element={

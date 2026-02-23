@@ -7,6 +7,7 @@
 const express = require('express');
 const { pool, transaction } = require('../config/database');
 const { hashpw, checkpw, gensalt } = require('../utils/ripcrypt');
+const passport = require('../config/passport');
 
 const router = express.Router();
 
@@ -559,5 +560,81 @@ router.post('/change-password', async (req, res) => {
     client.release();
   }
 });
+
+/* ==================== Google OAuth Routes ==================== */
+
+/**
+ * GET /auth/google
+ * Initiate Google OAuth flow
+ */
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+/**
+ * GET /auth/google/callback
+ * Handle Google OAuth callback
+ */
+router.get('/google/callback', 
+  passport.authenticate('google', { 
+    failureRedirect: '/login?error=google_auth_failed',
+    session: true
+  }),
+  (req, res) => {
+    // Successful authentication, redirect to dashboard
+    const user = req.user;
+    const redirectUrl = getRedirectUrl(user.primary_role);
+    res.redirect(redirectUrl);
+  }
+);
+
+/**
+ * GET /api/auth/google-login
+ * API endpoint to initiate Google OAuth for frontend
+ */
+router.get('/google-login', (req, res) => {
+  // Store the original URL to redirect back after OAuth
+  if (req.query.redirect) {
+    req.session.oauth_redirect = req.query.redirect;
+  }
+  
+  // Initiate Google OAuth
+  res.redirect('/auth/google');
+});
+
+/**
+ * GET /api/auth/google-callback
+ * Handle Google OAuth callback for API
+ */
+router.get('/google-callback', 
+  passport.authenticate('google', { 
+    failureRedirect: '/login?error=google_auth_failed',
+    session: true
+  }),
+  (req, res) => {
+    // Successful authentication
+    const user = req.user;
+    const redirectUrl = req.session.oauth_redirect || getRedirectUrl(user.primary_role);
+    
+    // Clear the stored redirect URL
+    delete req.session.oauth_redirect;
+    
+    // Always return JSON response for API - frontend will handle redirect
+    res.json({
+      success: true,
+      message: 'Google SSO login successful',
+      user: {
+        id: user.id,
+        email: user.email,
+        fullname: user.fullname,
+        ku_id: user.ku_id,
+        faculty: user.faculty,
+        department: user.department,
+        roles: user.roles,
+        primary_role: user.primary_role,
+        google_profile_picture: user.google_profile_picture,
+      },
+      redirect: redirectUrl,
+    });
+  }
+);
 
 module.exports = router;

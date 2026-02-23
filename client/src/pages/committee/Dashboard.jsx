@@ -1,6 +1,7 @@
 import React from 'react';
 import { FileText, Users, Award } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 
 // Mock data for award categories and application counts
 const awardCategories = [
@@ -49,6 +50,7 @@ const pendingApprovals = [
 
 function CommitteeDashboard() {
 	const navigate = useNavigate();
+	const { user } = useAuth();
 	const totalApplications = awardCategories.reduce((sum, cat) => sum + cat.applications, 0);
 
 	return (
@@ -56,7 +58,9 @@ function CommitteeDashboard() {
 			{/* Header Section */}
 			<div className="flex justify-between items-center">
 				<div>
-					<h1 className="text-2xl font-bold text-ku-main">Welcome, Committee 👋</h1>
+					<h1 className="text-2xl font-bold text-ku-main">
+						Welcome, {user?.fullname || 'Committee'} 👋
+					</h1>
 					<p className="text-gray-500">Committee Dashboard • Award Management</p>
 				</div>
 			</div>
