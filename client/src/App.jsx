@@ -18,6 +18,7 @@ import GoogleCallback from './pages/GoogleCallback';
 import StudentDashboard from './pages/student/Dashboard';
 import CreateTicket from './pages/student/CreateTicket';
 import StudentTracking from './pages/student/Tracking';
+import EditTicket from './pages/student/EditTicket';
 
 // --- Pages: Staff/Executive ---
 import StaffDashboard from './pages/staff/StaffDashboard';
@@ -56,6 +57,7 @@ function App() {
             <Route path="dashboard" element={<StudentDashboard />} />
             <Route path="create" element={<CreateTicket />} />
             <Route path="tracking" element={<StudentTracking />} />
+            <Route path="edit/:id" element={<EditTicket />} />
             <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
