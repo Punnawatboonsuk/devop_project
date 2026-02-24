@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@prisma/client": "^7.3.0",
+    "jspdf": "^4.2.0",
     "prisma": "^7.3.0"
   }
 }
