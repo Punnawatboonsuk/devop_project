@@ -96,13 +96,13 @@ const VotingControl = () => {
             print.push(academic[printlist])
         }
         }
-        else if(activaty.length >0){
+         if(activaty.length >0){
             print.push('รายชื่อผู้ได้รับรางวัลด้านความคิดสร้างสรรค์และนวัตกรรม')
         for(var printlist = 0;printlist < (activaty.length);printlist += 1){
             print.push(activaty[printlist])
         }
         }
-        else if(activaty.length >0){
+         if(activaty.length >0){
             print.push('รายชื่อผู้ได้รับรางวัลด้านความประพฤติดี')
         for(var printlist = 0;printlist < (innovation.length);printlist += 1){
             print.push(innovation[printlist])
