@@ -1,7 +1,7 @@
 import React from 'react';
 import { Home, FileText, CheckSquare, Users, BarChart, LogOut, Settings } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom'; // เพิ่ม useNavigate
-import { useAuth } from '../hooks/useAuth'; // ✅ 1. Import AuthContext
+import { useAuth } from '../context/AuthContext'; // ✅ 1. Import AuthContext
 
 const Sidebar = ({ role = 'STUDENT' }) => {
   const location = useLocation();
@@ -18,7 +18,6 @@ const Sidebar = ({ role = 'STUDENT' }) => {
   const menus = {
     STUDENT: [
       { name: 'Dashboard', icon: Home, path: '/student/dashboard' },
-      { name: 'My Applications', icon: FileText, path: '/student/applications' },
       { name: 'Tracking', icon: BarChart, path: '/student/tracking' },
       { name: 'History', icon: CheckSquare, path: '/student/history' },
     ],

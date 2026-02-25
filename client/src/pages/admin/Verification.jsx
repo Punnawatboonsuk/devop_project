@@ -2,13 +2,21 @@ import React, { useState } from 'react';
 import { Search, Edit2, CheckCircle, Save } from 'lucide-react';
 import StatusBadge from '../../components/StatusBadge';
 
+
 const Verification = () => {
   // Mock Data: รายการที่ผ่าน Dean มาแล้ว
   const [tickets, setTickets] = useState([
     { id: 101, name: 'Somsri Wirat', category: 'Academic', gpa: 3.85, status: 'dev_review' },
-    { id: 102, name: 'Kittipong J.', category: 'Sports', gpa: 3.20, status: 'dev_review' },
+    { id: 102, name: 'Kittipong J.', category: 'Activity', gpa: 3.20, status: 'dev_review' },
     { id: 103, name: 'Wichai K.', category: 'Innovation', gpa: 3.50, status: 'dev_review' },
   ]);
+  //make search bar and filter
+  const [awardCatagory, setawardCatagory] = useState("none");
+
+  const handleChange = (event) => {
+    setawardCatagory(event.target.value)
+  }
+  
 
   // State สำหรับการแก้ไข (Editing Mode)
   const [editingId, setEditingId] = useState(null);
@@ -42,6 +50,15 @@ const Verification = () => {
           <h1 className="text-2xl font-bold text-ku-main">Verification Console</h1>
           <p className="text-gray-500">Review and verify applications before voting.</p>
         </div>
+        <form>
+      <p >Filter:</p>
+      <select value={awardCatagory} onChange={handleChange} className="border border-ku-main rounded p-1 text-sm outline-none">
+        <option value="none">All</option>
+        <option value="Academic">Academic</option>
+        <option value="Innovation">Innovation</option>
+        <option value="Activity">Activity</option>
+      </select>
+    </form>
         <div className="bg-orange-50 text-orange-700 px-4 py-2 rounded-lg text-sm font-medium">
             Pending Verify: {tickets.filter(t => t.status === 'dev_review').length}
         </div>
@@ -59,7 +76,11 @@ const Verification = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {tickets.map((ticket) => (
+            {tickets.filter((ticket) => {
+                return awardCatagory === 'none'
+                  ? ticket
+                  : ticket.category.includes(awardCatagory);
+              }).map((ticket) => (
               <tr key={ticket.id} className="hover:bg-gray-50">
                 <td className="p-4 font-medium text-gray-800">{ticket.name}</td>
                 <td className="p-4 text-gray-600">{ticket.gpa}</td>

@@ -1,15 +1,11 @@
 // src/pages/Login.jsx
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { FaUser, FaLock, FaGoogle } from 'react-icons/fa';
-import KULogo from '../assets/KU_Logo_PNG.png';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const { login, user, loading } = useAuth();
+  const [username, setUsername] = useState('');
+  const { login, user } = useAuth(); // ดึง user ออกมาด้วยเพื่อรอเช็ค
   const navigate = useNavigate();
 
   // ✅ ใช้ useEffect รอฟังว่าเมื่อไหร่ที่ user เปลี่ยนสถานะ (Login สำเร็จ) ค่อยย้ายหน้า
@@ -17,65 +13,57 @@ const Login = () => {
     if (user) {
       if (user.primary_role === 'STUDENT' && user.needs_profile_completion) navigate('/auth/sso-setup');
       else if (user.primary_role === 'STUDENT') navigate('/student/dashboard');
-      else if (user.primary_role === 'STAFF') navigate('/staff/dashboard');
-      else if (user.primary_role === 'ADMIN') navigate('/admin/verification');
-      else if (user.primary_role === 'COMMITTEE') navigate('/committee/dashboard');
-      else if (user.primary_role === 'COMMITTEE_PRESIDENT') navigate('/president/proclaim');
+      // ✅ ครอบคลุมสายอนุมัติระดับคณะทั้งหมดให้อยู่ Layout เดียวกัน
+      else if (['STAFF', 'SUB_DEAN', 'DEAN'].includes(user.role)) {
+        navigate('/staff/dashboard');
+      } 
+      else if (user.role === 'ADMIN') {
+        navigate('/admin/verification');
+      } 
+      else if (user.role === 'COMMITTEE') {
+        navigate('/committee/vote');
+      } 
+      else if (user.role === 'PRESIDENT') {
+        navigate('/president/proclaim');
+      }
     }
   }, [user, navigate]); // ทำงานทุกครั้งที่ user หรือ navigate เปลี่ยนแปลง
 
-  const handleLogin = async (e) => {
+  const handleLogin = (e) => {
     e.preventDefault();
-    setError('');
-    
-    if (!email || !password) {
-      setError('Please enter both email and password');
-      return;
-    }
-
-    const result = await login(email, password);
-    if (!result.success) {
-      setError(result.message || 'Login failed');
-    }
+    // แค่สั่ง login พอ ไม่ต้องสั่ง navigate ตรงนี้แล้ว ให้ useEffect ข้างบนทำงานแทน
+    login(username, 'password'); 
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f7faf7] relative">
-      {/* Top left logo and university name */}
-      <div className="absolute top-6 left-8 flex items-center">
-        <img src={KULogo} alt="KU Logo" className="w-12 h-12 mr-3" />
-        <div>
-          <span className="text-[#1a7f42] font-bold text-xl">Kasetsart University</span>
-          <div className="text-[#1a7f42] text-sm opacity-80">Faculty of Science</div>
-        </div>
-      </div>
-
-      {/* Language switcher */}
-      <div className="absolute top-6 right-8 text-gray-400 text-sm select-none">TH / EN</div>
-
-      {/* Login Card */}
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md flex flex-col items-center">
-        {/* KU SSO Logo */}
-        <div className="mb-4">
-          <img src={KULogo} alt="KU Logo" className="w-24 h-26" />
-        </div>
-        <h2 className="text-xl font-bold text-green-800 mb-1 text-center">Nisit Deeden Award System</h2>
-        <p className="text-black-700 text-sm text-center mb-4"><br /><span className="font-semibold text-grey-800">KU SSO Login</span></p>
-
-        <form onSubmit={handleLogin} className="w-full mt-2">
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1">KU Email</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><FaUser /></span>
-            <input
-                type="text"
-                placeholder="e.g. example@ku.th"
-                className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1a7f42]"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="bg-white p-8 rounded-2xl shadow-lg w-96 border border-gray-100">
+        <h1 className="text-2xl font-black text-ku-main mb-2 text-center tracking-tight">
+          Nisit Deeden
+        </h1>
+        <p className="text-center text-gray-500 text-sm mb-6">ระบบคัดเลือกนิสิตดีเด่น มก.</p>
+        
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">
+              Username (Mock Test)
+            </label>
+            <input 
+              type="text" 
+              placeholder="Try: student, staff, admin"
+              className="w-full border border-gray-300 p-3 rounded-xl mt-1 outline-none focus:ring-2 focus:ring-ku-main/50 focus:border-ku-main transition"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+            <div className="bg-blue-50 p-3 rounded-lg mt-3 border border-blue-100">
+              <p className="text-xs text-blue-800 font-medium mb-1">Role ที่มีให้ทดสอบพิมพ์:</p>
+              <ul className="text-[11px] text-blue-600 font-mono space-y-0.5 ml-2">
+                <li>• student</li>
+                <li>• staff / sub_dean / dean</li>
+                <li>• admin</li>
+                <li>• committee / president</li>
+              </ul>
             </div>
           </div>
           <div className="mb-6">
@@ -112,20 +100,9 @@ const Login = () => {
             }}
             className="w-full mt-4 bg-white text-gray-700 py-3 rounded-lg font-bold border-2 border-gray-300 hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 flex items-center justify-center"
           >
-            <FaGoogle className="mr-2 text-red-500" />
-            Login with Google (KU Email Only)
+            Sign In to System
           </button>
         </form>
-        <button
-          onClick={() => navigate('/register')}
-          className="w-full mt-4 bg-white text-[#1a7f42] py-3 rounded-lg font-bold border-2 border-[#1a7f42] hover:bg-[#1a7f42] hover:text-white transition-all duration-300 transform hover:scale-105"
-        >Register as Student</button>
-        <div className="text-xs text-gray-500 mt-6 text-center">Need help logging in? <span className="text-[#1a7f42] font-medium cursor-pointer hover:underline">Contact IT Support</span></div>
-      </div>
-
-      {/* Footer */}
-      <div className="absolute bottom-4 left-0 w-full flex flex-col items-center text-xs text-gray-400 select-none">
-        <div>© 2024 Kasetsart University. All rights reserved.</div>
       </div>
     </div>
   );

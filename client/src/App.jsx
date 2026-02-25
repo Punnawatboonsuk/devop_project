@@ -20,6 +20,8 @@ import StudentDashboard from './pages/student/Dashboard';
 import CreateTicket from './pages/student/CreateTicket';
 import StudentTracking from './pages/student/Tracking';
 import EditTicket from './pages/student/EditTicket';
+import StudentHistory from './pages/student/History';
+import TicketDetail from './pages/student/TicketDetail';
 
 // --- Pages: Staff/Executive ---
 import StaffDashboard from './pages/staff/StaffDashboard';
@@ -68,6 +70,8 @@ function App() {
             <Route path="tracking" element={<StudentTracking />} />
             <Route path="edit/:id" element={<EditTicket />} />
             <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="history" element={<StudentHistory />} />
+            <Route path="ticket/:id" element={<TicketDetail />} />
           </Route>
 
           {/* ================= STAFF/DEAN ROUTES ================= */}
