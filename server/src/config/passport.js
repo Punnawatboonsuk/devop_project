@@ -37,20 +37,19 @@ passport.use(new GoogleStrategy({
 
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
-      
-      // Update profile picture if provided
-      if (profilePicture && user.google_profile_picture !== profilePicture) {
-        await pool.query(
-          'UPDATE users SET google_profile_picture = $1, last_login = NOW() WHERE id = $2',
-          [profilePicture, user.id]
-        );
-      } else {
-        // Update last login
-        await pool.query(
-          'UPDATE users SET last_login = NOW() WHERE id = $1',
-          [user.id]
-        );
-      }
+
+      // Keep SSO metadata in sync for all roles logging in via Google.
+      const updateResult = await pool.query(
+        `UPDATE users
+         SET google_id = $1,
+             google_profile_picture = COALESCE($2, google_profile_picture),
+             sso_enabled = true,
+             last_login = NOW()
+         WHERE id = $3
+         RETURNING *`,
+        [googleId, profilePicture || null, user.id]
+      );
+      const updatedUser = updateResult.rows[0];
 
       // Get user roles
       const rolesResult = await pool.query(
@@ -58,13 +57,13 @@ passport.use(new GoogleStrategy({
          FROM user_roles ur 
          JOIN roles r ON ur.role_id = r.id 
          WHERE ur.user_id = $1`,
-        [user.id]
+        [updatedUser.id]
       );
       
       const roles = rolesResult.rows.map(row => row.name);
       const primaryRole = getPrimaryRole(roles);
 
-      return done(null, { ...user, roles, primary_role: primaryRole });
+      return done(null, { ...updatedUser, roles, primary_role: primaryRole });
     }
 
     // Create new user if doesn't exist

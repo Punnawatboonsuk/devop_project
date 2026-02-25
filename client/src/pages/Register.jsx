@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import KULogo from '../assets/KU_Logo_PNG.png';
+import FacultyDepartmentSelector from "../components/FacultyDepartmentSelector";
 
 const Register = () => {
   const [form, setForm] = useState({
@@ -86,14 +87,14 @@ const Register = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">KU Student ID</label>
             <input name="ku_id" type="text" placeholder="KU Student ID" value={form.ku_id} onChange={handleChange} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1a7f42]" />
           </div>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Faculty</label>
-            <input name="faculty" type="text" placeholder="Faculty" value={form.faculty} onChange={handleChange} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1a7f42]" />
-          </div>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-            <input name="department" type="text" placeholder="Department" value={form.department} onChange={handleChange} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1a7f42]" />
-          </div>
+          <FacultyDepartmentSelector
+            selectedFaculty={form.faculty}
+            selectedDepartment={form.department}
+            onFacultyChange={(faculty) => setForm(prevForm => ({ ...prevForm, faculty }))}
+            onDepartmentChange={(department) => setForm(prevForm => ({ ...prevForm, department }))}
+            facultyError={error && !form.faculty ? "Faculty is required" : ""}
+            departmentError={error && !form.department ? "Department is required" : ""}
+          />
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
             <input name="password" type="password" placeholder="Password" value={form.password} onChange={handleChange} className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1a7f42]" required />

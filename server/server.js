@@ -8,7 +8,7 @@ const app = require('./app');
 const { pool } = require('./src/config/database');
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || 'localhost';
 
 // Test database connection before starting server
 async function startServer() {

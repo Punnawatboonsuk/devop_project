@@ -13,6 +13,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import GoogleCallback from './pages/GoogleCallback';
+import SSOProfileSetup from './pages/SSOProfileSetup';
 
 // --- Pages: Student ---
 import StudentDashboard from './pages/student/Dashboard';
@@ -47,6 +48,14 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/auth/google-callback" element={<GoogleCallback />} />
+          <Route
+            path="/auth/sso-setup"
+            element={(
+              <ProtectedRoute allowedRoles={['STUDENT']}>
+                <SSOProfileSetup />
+              </ProtectedRoute>
+            )}
+          />
 
           {/* ================= STUDENT ROUTES ================= */}
           <Route path="/student" element={
@@ -87,7 +96,7 @@ function App() {
 
           {/* ================= COMMITTEE ROUTES ================= */}
           <Route path="/committee" element={
-            <ProtectedRoute allowedRoles={['COMMITTEE', 'PRESIDENT']}>
+            <ProtectedRoute allowedRoles={['COMMITTEE']}>
               <Layout role="COMMITTEE" />
             </ProtectedRoute>
           }>
@@ -102,7 +111,7 @@ function App() {
            {/* ================= PRESIDENT ROUTES ================= */}
            {/* ประธานใช้ Layout ของ Committee แต่มีหน้าพิเศษเพิ่ม */}
            <Route path="/president" element={
-            <ProtectedRoute allowedRoles={['PRESIDENT']}>
+            <ProtectedRoute allowedRoles={['COMMITTEE_PRESIDENT']}>
               <Layout role="COMMITTEE" />
             </ProtectedRoute>
           }>

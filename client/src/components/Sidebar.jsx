@@ -28,7 +28,7 @@ const Sidebar = ({ role = 'STUDENT' }) => {
       { name: 'History', icon: CheckSquare, path: '/staff/history' },
     ],
     ADMIN: [
-      { name: 'Dashboard', icon: Home, path: '/admin/dashboard' },
+      { name: 'Dashboard', icon: Home, path: '/admin/verification' },
       { name: 'Verification', icon: CheckSquare, path: '/admin/verification' },
       { name: 'Voting Control', icon: Users, path: '/admin/voting' },
       { name: 'Reports', icon: FileText, path: '/admin/reports' },

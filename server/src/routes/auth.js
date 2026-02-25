@@ -64,13 +64,50 @@ function getRedirectUrl(role) {
   const roleRoutes = {
     STUDENT: '/student/dashboard',
     STAFF: '/staff/dashboard',
-    SUB_DEAN: '/subdean/dashboard',
-    DEAN: '/dean/dashboard',
-    ADMIN: '/admin/dashboard',
+    SUB_DEAN: '/staff/dashboard',
+    DEAN: '/staff/dashboard',
+    ADMIN: '/admin/verification',
     COMMITTEE: '/committee/dashboard',
-    COMMITTEE_PRESIDENT: '/president/dashboard',
+    COMMITTEE_PRESIDENT: '/president/proclaim',
   };
   return roleRoutes[role] || '/login';
+}
+
+/**
+ * Build absolute frontend URL from a route path
+ */
+function toFrontendUrl(routePath) {
+  const frontendBase = (process.env.FRONTEND_URL || process.env.CORS_ORIGIN || 'http://localhost:5173').replace(/\/+$/, '');
+  const safePath = typeof routePath === 'string' && routePath.startsWith('/') ? routePath : '/login';
+  return `${frontendBase}${safePath}`;
+}
+
+/**
+ * Sync Passport-authenticated user into app session fields expected by /api/auth/me and protected APIs
+ */
+function setSessionFromUser(req, user) {
+  req.session.user_id = user.id;
+  req.session.email = user.email || null;
+  req.session.fullname = user.fullname || null;
+  req.session.ku_id = user.ku_id || null;
+  req.session.faculty = user.faculty || null;
+  req.session.department = user.department || null;
+  req.session.roles = user.roles || [];
+  req.session.primary_role = user.primary_role || getPrimaryRole(user.roles || []);
+  req.session.sso_authenticated = true;
+}
+
+function needsProfileCompletionFromSession(req) {
+  const missingProfile =
+    !req.session.ku_id ||
+    !req.session.faculty ||
+    !req.session.department;
+
+  return (
+    req.session.sso_authenticated === true &&
+    req.session.primary_role === 'STUDENT' &&
+    missingProfile
+  );
 }
 
 /**
@@ -196,6 +233,7 @@ router.post('/login', async (req, res) => {
         department: user.department,
         roles: roles,
         primary_role: primaryRole,
+        needs_profile_completion: false,
       },
       redirect: getRedirectUrl(primaryRole),
     });
@@ -412,6 +450,10 @@ router.post('/ku-sso-callback', async (req, res) => {
     req.session.primary_role = primaryRole;
     req.session.sso_authenticated = true;
 
+    const redirectUrl = needsProfileCompletionFromSession(req)
+      ? '/auth/sso-setup'
+      : getRedirectUrl(primaryRole);
+
     return res.status(200).json({
       message: 'SSO login successful',
       user: {
@@ -423,8 +465,9 @@ router.post('/ku-sso-callback', async (req, res) => {
         department: req.session.department,
         roles: roles,
         primary_role: primaryRole,
+        needs_profile_completion: needsProfileCompletionFromSession(req),
       },
-      redirect: getRedirectUrl(primaryRole),
+      redirect: redirectUrl,
     });
   } catch (error) {
     console.error('SSO error:', error);
@@ -467,6 +510,8 @@ router.get('/me', (req, res) => {
     return res.status(401).json({ authenticated: false });
   }
 
+  const needsProfileCompletion = needsProfileCompletionFromSession(req);
+
   return res.status(200).json({
     authenticated: true,
     user: {
@@ -478,8 +523,71 @@ router.get('/me', (req, res) => {
       department: req.session.department,
       roles: req.session.roles,
       primary_role: req.session.primary_role,
+      needs_profile_completion: needsProfileCompletion,
     },
   });
+});
+
+/**
+ * POST /api/auth/complete-profile
+ * Complete required profile fields for SSO student accounts
+ */
+router.post('/complete-profile', async (req, res) => {
+  if (!req.session.user_id) {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
+
+  if (req.session.primary_role !== 'STUDENT') {
+    return res.status(403).json({ message: 'Only student accounts can complete this profile' });
+  }
+
+  const { ku_id = '', faculty = '', department = '' } = req.body;
+  const kuId = ku_id.trim();
+  const facultyValue = faculty.trim();
+  const departmentValue = department.trim();
+
+  if (!kuId || !facultyValue || !departmentValue) {
+    return res.status(400).json({
+      message: 'KU ID, faculty, and department are required',
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `UPDATE users
+       SET ku_id = $1,
+           faculty = $2,
+           department = $3
+       WHERE id = $4`,
+      [kuId, facultyValue, departmentValue, req.session.user_id]
+    );
+
+    req.session.ku_id = kuId;
+    req.session.faculty = facultyValue;
+    req.session.department = departmentValue;
+
+    return res.status(200).json({
+      message: 'Profile completed successfully',
+      user: {
+        id: req.session.user_id,
+        email: req.session.email,
+        fullname: req.session.fullname,
+        ku_id: req.session.ku_id,
+        faculty: req.session.faculty,
+        department: req.session.department,
+        roles: req.session.roles,
+        primary_role: req.session.primary_role,
+        needs_profile_completion: needsProfileCompletionFromSession(req),
+      },
+      redirect: getRedirectUrl(req.session.primary_role),
+    });
+  } catch (error) {
+    console.error('Complete profile error:', error);
+    return res.status(500).json({ message: 'Failed to complete profile' });
+  } finally {
+    client.release();
+  }
 });
 
 /**
@@ -564,25 +672,40 @@ router.post('/change-password', async (req, res) => {
 /* ==================== Google OAuth Routes ==================== */
 
 /**
- * GET /auth/google
+ * GET /api/auth/google
  * Initiate Google OAuth flow
  */
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 /**
- * GET /auth/google/callback
+ * GET /api/auth/google/callback
  * Handle Google OAuth callback
  */
 router.get('/google/callback', 
   passport.authenticate('google', { 
-    failureRedirect: '/login?error=google_auth_failed',
+    failureRedirect: toFrontendUrl('/login?error=google_auth_failed'),
     session: true
   }),
   (req, res) => {
-    // Successful authentication, redirect to dashboard
     const user = req.user;
-    const redirectUrl = getRedirectUrl(user.primary_role);
-    res.redirect(redirectUrl);
+    setSessionFromUser(req, user);
+    const roleRedirect = needsProfileCompletionFromSession(req)
+      ? '/auth/sso-setup'
+      : getRedirectUrl(user.primary_role);
+    const oauthCallbackPath = (
+      typeof req.session.oauth_redirect === 'string' &&
+      req.session.oauth_redirect.startsWith('/')
+    ) ? req.session.oauth_redirect : null;
+
+    delete req.session.oauth_redirect;
+
+    if (oauthCallbackPath) {
+      const callbackUrl = new URL(toFrontendUrl(oauthCallbackPath));
+      callbackUrl.searchParams.set('next', roleRedirect);
+      return res.redirect(callbackUrl.toString());
+    }
+
+    return res.redirect(toFrontendUrl(roleRedirect));
   }
 );
 
@@ -597,7 +720,7 @@ router.get('/google-login', (req, res) => {
   }
   
   // Initiate Google OAuth
-  res.redirect('/auth/google');
+  res.redirect('/api/auth/google');
 });
 
 /**
@@ -606,34 +729,29 @@ router.get('/google-login', (req, res) => {
  */
 router.get('/google-callback', 
   passport.authenticate('google', { 
-    failureRedirect: '/login?error=google_auth_failed',
+    failureRedirect: toFrontendUrl('/login?error=google_auth_failed'),
     session: true
   }),
   (req, res) => {
-    // Successful authentication
     const user = req.user;
-    const redirectUrl = req.session.oauth_redirect || getRedirectUrl(user.primary_role);
-    
-    // Clear the stored redirect URL
+    setSessionFromUser(req, user);
+    const roleRedirect = needsProfileCompletionFromSession(req)
+      ? '/auth/sso-setup'
+      : getRedirectUrl(user.primary_role);
+    const oauthCallbackPath = (
+      typeof req.session.oauth_redirect === 'string' &&
+      req.session.oauth_redirect.startsWith('/')
+    ) ? req.session.oauth_redirect : null;
+
     delete req.session.oauth_redirect;
-    
-    // Always return JSON response for API - frontend will handle redirect
-    res.json({
-      success: true,
-      message: 'Google SSO login successful',
-      user: {
-        id: user.id,
-        email: user.email,
-        fullname: user.fullname,
-        ku_id: user.ku_id,
-        faculty: user.faculty,
-        department: user.department,
-        roles: user.roles,
-        primary_role: user.primary_role,
-        google_profile_picture: user.google_profile_picture,
-      },
-      redirect: redirectUrl,
-    });
+
+    if (oauthCallbackPath) {
+      const callbackUrl = new URL(toFrontendUrl(oauthCallbackPath));
+      callbackUrl.searchParams.set('next', roleRedirect);
+      return res.redirect(callbackUrl.toString());
+    }
+
+    return res.redirect(toFrontendUrl(roleRedirect));
   }
 );
 

@@ -15,7 +15,8 @@ const Login = () => {
   // ✅ ใช้ useEffect รอฟังว่าเมื่อไหร่ที่ user เปลี่ยนสถานะ (Login สำเร็จ) ค่อยย้ายหน้า
   useEffect(() => {
     if (user) {
-      if (user.primary_role === 'STUDENT') navigate('/student/dashboard');
+      if (user.primary_role === 'STUDENT' && user.needs_profile_completion) navigate('/auth/sso-setup');
+      else if (user.primary_role === 'STUDENT') navigate('/student/dashboard');
       else if (user.primary_role === 'STAFF') navigate('/staff/dashboard');
       else if (user.primary_role === 'ADMIN') navigate('/admin/verification');
       else if (user.primary_role === 'COMMITTEE') navigate('/committee/dashboard');
@@ -100,8 +101,14 @@ const Login = () => {
           {/* Google OAuth Button */}
           <button
             onClick={() => {
-              // Redirect to Google OAuth with callback to frontend
-              window.location.href = `/api/auth/google-login?redirect=${encodeURIComponent('/auth/google-callback')}`;
+              // Use proper redirect to Google OAuth through backend
+              try {
+                // Redirect to backend Google OAuth endpoint
+                window.location.href = `/api/auth/google-login?redirect=${encodeURIComponent('/auth/google-callback')}`;
+              } catch (error) {
+                console.error('Google OAuth redirect failed:', error);
+                alert('Unable to redirect to Google OAuth. Please try again.');
+              }
             }}
             className="w-full mt-4 bg-white text-gray-700 py-3 rounded-lg font-bold border-2 border-gray-300 hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 flex items-center justify-center"
           >

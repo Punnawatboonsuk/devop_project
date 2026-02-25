@@ -146,19 +146,56 @@ const AuthProvider = ({ children }) => {
     }
   };
 
+  const completeProfile = async (profileData) => {
+    try {
+      const response = await authenticatedApiRequest('/api/auth/complete-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(profileData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setUser(data.user);
+        toast.success('Profile completed successfully');
+        return { success: true, redirect: data.redirect };
+      }
+
+      toast.error(data.message || 'Failed to complete profile');
+      return { success: false, message: data.message || 'Failed to complete profile' };
+    } catch (error) {
+      console.error('Complete profile error:', error);
+      toast.error('Network error. Please try again.');
+      return { success: false, message: 'Network error' };
+    }
+  };
+
   // Handle Google OAuth callback
   const handleGoogleCallback = async () => {
     try {
       const response = await authenticatedApiRequest('/api/auth/google-callback');
+      
+      // Handle 401 errors (unauthorized)
+      if (response.status === 401) {
+        toast.error('Google authentication failed. Please try again.');
+        return { success: false, message: 'Authentication failed' };
+      }
+      
       const data = await response.json();
 
       if (response.ok && data.success) {
         setUser(data.user);
         toast.success('Google SSO login successful');
+        
+        // For OAuth callbacks, we should redirect immediately
+        // This method is typically called from GoogleCallback.jsx which handles the redirect
         return { success: true, redirect: data.redirect };
       } else {
         toast.error(data.message || 'Google authentication failed');
-        return { success: false, message: data.message };
+        return { success: false, message: data.message || 'Authentication failed' };
       }
     } catch (error) {
       console.error('Google callback error:', error);
@@ -174,6 +211,7 @@ const AuthProvider = ({ children }) => {
     logout,
     register,
     changePassword,
+    completeProfile,
     getCurrentUser,
     handleGoogleCallback,
   };
