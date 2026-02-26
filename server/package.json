@@ -12,7 +12,8 @@
     "create-sub-dean": "node scripts/createSubDean.js",
     "create-dean": "node scripts/createDean.js",
     "create-committee": "node scripts/createCommittee.js",
-    "create-committee-president": "node scripts/createCommitteePresident.js"
+    "create-committee-president": "node scripts/createCommitteePresident.js",
+    "set-phase": "node scripts/setPhase.js"
   },
   "keywords": [
     "ku",

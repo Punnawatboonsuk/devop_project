@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Edit, Lock, XCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Edit, Lock, XCircle, RefreshCw } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { authenticatedApiRequest } from '../../utils/api';
 
 const StatCard = ({ title, value, icon: Icon, color }) => (
   <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
@@ -16,42 +17,94 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
-
-  // ------------------------------------------------------------------
-  // 💡 MOCK STATE: ลองเปลี่ยนค่าพวกนี้เพื่อเทสหน้าจอแต่ละแบบดูครับ
-  // ------------------------------------------------------------------
+  const [loading, setLoading] = useState(true);
   
-  // 1. สถานะของระบบ (Phase) -> 'NOMINATION' (เปิดรับ) หรือ 'CLOSED_NOMINATION' (ปิดรับ)
-  const systemPhase = 'NOMINATION'; 
+  // State for system and ticket data
+  const [systemPhase, setSystemPhase] = useState(null);
+  const [activeTicket, setActiveTicket] = useState(null);
+  const [tickets, setTickets] = useState([]);
+  const [user, setUser] = useState(null);
 
-  // 2. สถานะใบสมัครของนิสิต -> null (ยังไม่สมัคร), 'pending' (รอตรวจ), 'reject' (โดนตีกลับ), 'approved' (ผ่าน)
-  /*const activeTicket = {
-    id: 'APP-2024-001',
-    title: 'นวัตกรรมเครื่องสีข้าวขนาดเล็ก',
-    category: 'Innovation (นวัตกรรม)',
-    status: 'approved', // <-- ลองเปลี่ยนเป็น 'pending', 'reject', 'approved', หรือตั้งเป็น null 
-    rejectReason: 'ไฟล์ใบรับรองอาจารย์ที่ปรึกษาไม่ชัดเจน และขาดรูปถ่ายผลงานประกอบการพิจารณา โปรดแก้ไขและส่งใหม่',
-    rejectedBy: 'Staff ID: ST001 (เจ้าหน้าที่คณะ)',
-    lastUpdate: '2 hours ago'
-  };*/
-  
-  const activeTicket = null; // ถ้ายกเลิกคอมเมนต์บรรทัดนี้ จะเป็นการจำลองว่า "นิสิตยังไม่เคยสมัคร"
+  // Fetch system phase, user info, and user tickets
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
 
-  // ------------------------------------------------------------------
+        // Fetch user info
+        const userResponse = await authenticatedApiRequest('/api/auth/me');
+        if (userResponse.ok) {
+          const userData = await userResponse.json();
+          setUser(userData.user);
+        }
+
+        // Fetch system phase
+        const phaseResponse = await authenticatedApiRequest('/api/auth/phase');
+        if (phaseResponse.ok) {
+          const phaseData = await phaseResponse.json();
+          setSystemPhase(phaseData.phase);
+        }
+
+        // Fetch user tickets
+        const ticketsResponse = await authenticatedApiRequest('/api/tickets/me');
+        if (ticketsResponse.ok) {
+          const ticketsData = await ticketsResponse.json();
+          setTickets(ticketsData.tickets || []);
+          
+          // Find active ticket (most recent or current)
+          const active = ticketsData.tickets?.find(ticket => 
+            ticket.status === 'DRAFT' || 
+            ticket.status === 'SUBMITTED_BY_STUDENT' || 
+            ticket.status === 'REVIEWED_BY_STAFF' || 
+            ticket.status === 'REVIEWED_BY_SUBDEAN' || 
+            ticket.status === 'REVIEWED_BY_DEAN' || 
+            ticket.status === 'APPROVED'
+          );
+          setActiveTicket(active || null);
+        }
+      } catch (err) {
+        console.error('Dashboard fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Calculate statistics
+  const totalTickets = tickets.length;
+  const pendingTickets = tickets.filter(t => 
+    t.status === 'SUBMITTED_BY_STUDENT' || 
+    t.status === 'REVIEWED_BY_STAFF' || 
+    t.status === 'REVIEWED_BY_SUBDEAN' || 
+    t.status === 'REVIEWED_BY_DEAN'
+  ).length;
+  const approvedTickets = tickets.filter(t => t.status === 'APPROVED').length;
 
   // ฟังก์ชันเช็คปุ่ม "สร้างใบสมัครใหม่"
   const renderApplyButton = () => {
-    if (systemPhase === 'CLOSED_NOMINATION') {
+    if (loading) {
+      return (
+        <button disabled className="flex items-center gap-2 bg-gray-200 text-gray-500 px-5 py-2.5 rounded-lg cursor-not-allowed font-medium shadow-sm">
+          <RefreshCw size={18} className="animate-spin" /> กำลังโหลด...
+        </button>
+      );
+    }
+
+    if (systemPhase === 'CLOSED_NOMINATION' || systemPhase === 'REVIEW_END' || systemPhase === 'VOTING' || systemPhase === 'VOTING_END' || systemPhase === 'CERTIFICATE') {
       return (
         <button disabled className="flex items-center gap-2 bg-gray-200 text-gray-500 px-5 py-2.5 rounded-lg cursor-not-allowed font-medium shadow-sm">
           <Lock size={18} /> ปิดรับการเสนอชื่อ
         </button>
       );
     }
-    if (activeTicket) {
-      // ถ้ามีใบสมัครอยู่แล้ว ให้ซ่อนปุ่ม (หรือไม่ให้กด) เพื่อกันการส่งซ้ำในรายการเดิม
+    
+    if (activeTicket && activeTicket.status !== 'REJECTED') {
+      // ถ้ามีใบสมัครอยู่แล้วและไม่ใช่ rejected ให้ซ่อนปุ่มเพื่อกันการส่งซ้ำ
       return null; 
     }
+    
     return (
       <Link to="/student/create" className="flex items-center gap-2 bg-ku-main text-white px-5 py-2.5 rounded-lg hover:bg-green-800 transition shadow-md font-medium">
         <Plus size={20} />
@@ -65,10 +118,14 @@ const StudentDashboard = () => {
       {/* --- Header Section --- */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">สวัสดี, สมชาย ขยันเรียน 👋</h1>
+          <h1 className="text-2xl font-bold text-gray-800">
+            สวัสดี, {user?.fullname || 'นิสิต'} 👋
+          </h1>
           <p className="text-gray-500 mt-1 flex items-center gap-2">
-            <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded text-gray-600">642011xxxx</span>
-            วิศวกรรมศาสตร์ • วิศวกรรมเครื่องกล
+            <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded text-gray-600">
+              {user?.ku_id || 'ไม่ระบุ'}
+            </span>
+            {user?.faculty || 'ไม่ระบุ'} • {user?.department || 'ไม่ระบุ'}
           </p>
         </div>
         <div>
@@ -109,9 +166,9 @@ const StudentDashboard = () => {
 
       {/* --- Stats Grid --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="ประวัติการส่งทั้งหมด" value="1" icon={FileText} color="bg-blue-50 text-blue-600" />
-        <StatCard title="รอการตรวจสอบ" value={activeTicket?.status === 'pending' ? '1' : '0'} icon={Clock} color="bg-orange-50 text-orange-600" />
-        <StatCard title="อนุมัติแล้ว" value={activeTicket?.status === 'approved' ? '1' : '0'} icon={CheckCircle} color="bg-green-50 text-green-600" />
+        <StatCard title="ประวัติการส่งทั้งหมด" value={totalTickets} icon={FileText} color="bg-blue-50 text-blue-600" />
+        <StatCard title="รอการตรวจสอบ" value={pendingTickets} icon={Clock} color="bg-orange-50 text-orange-600" />
+        <StatCard title="อนุมัติแล้ว" value={approvedTickets} icon={CheckCircle} color="bg-green-50 text-green-600" />
       </div>
 
       {/* --- Active Application Card --- */}
