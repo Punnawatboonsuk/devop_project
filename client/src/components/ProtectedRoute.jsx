@@ -1,6 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom';
-// ตรวจสอบว่า import useAuth มาจากไฟล์ที่ถูกต้อง
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../hooks/useAuth';
 
 const roleFallbackRoutes = {
   STUDENT: '/student/dashboard',
@@ -36,7 +35,6 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to={roleFallbackRoutes[user.primary_role] || '/login'} replace />;
   }
 
-  // 3. ถ้า Role ถูกต้อง ก็ให้แสดงผลหน้าเว็บได้ตามปกติ
   return children;
 };
 
