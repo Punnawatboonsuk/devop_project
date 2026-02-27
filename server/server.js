@@ -9,7 +9,7 @@ const { pool } = require('./src/config/database');
 const { hashpw, gensalt } = require('./src/utils/ripcrypt');
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
 
 async function ensureDefaultAdminAccount() {
   const defaultEmail = 'admin@ku.th';
