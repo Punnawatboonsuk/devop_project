@@ -64,6 +64,14 @@ function validateKuEmail(email = '') {
   return kuPattern.test(email);
 }
 
+const PHASE_FLOW = [
+  PHASES.NOMINATION,
+  PHASES.REVIEW_END,
+  PHASES.VOTING,
+  PHASES.VOTING_END,
+  PHASES.CERTIFICATE
+];
+
 function normalizeRoleInput(role = '') {
   const value = String(role).trim().toUpperCase().replace(/\s+/g, '_');
   const accepted = new Set([
@@ -542,6 +550,85 @@ router.post('/phase/end-nomination', requireAdminAuth, async (req, res) => {
   } catch (error) {
     console.error('End nomination error:', error);
     return res.status(400).json({ message: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/phase/initialize
+ * Create/initialize first phase for selected academic year/semester.
+ * Admin can set the initial phase directly on fresh start.
+ */
+router.post('/phase/initialize', requireAdminAuth, async (req, res) => {
+  try {
+    const result = await transaction(async (client) => {
+      const round = await resolveRound(client, req.body, { createIfMissing: true });
+      if (!round) {
+        throw new Error('Round not found');
+      }
+
+      const requestedPhase = String(req.body?.phase || PHASES.NOMINATION).trim().toUpperCase();
+      if (!PHASE_FLOW.includes(requestedPhase)) {
+        throw new Error(`Invalid phase: ${requestedPhase}`);
+      }
+
+      const existingPhase = await getCurrentPhaseForRound(client, round.id);
+      if (existingPhase?.phase) {
+        throw new Error(`Round already initialized with phase ${existingPhase.phase}`);
+      }
+
+      let current = await ensureInitialNominationPhase(
+        client,
+        round.id,
+        req.session.user_id,
+        'Round initialized by admin'
+      );
+
+      while (current?.phase && current.phase !== requestedPhase) {
+        const currentIndex = PHASE_FLOW.indexOf(current.phase);
+        const nextPhase = PHASE_FLOW[currentIndex + 1];
+        if (!nextPhase) break;
+
+        current = await advancePhase(
+          client,
+          round.id,
+          nextPhase,
+          req.session.user_id,
+          `Initialization advance to ${nextPhase}`
+        );
+      }
+
+      await createAuditLog(client, req.session.user_id, LOG_ACTIONS.PHASE_CHANGE, {
+        resourceType: 'round_phase_history',
+        resourceId: round.id,
+        newValues: {
+          action: 'initialize_round_phase',
+          round_id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          old_phase: null,
+          new_phase: current?.phase || null
+        }
+      });
+
+      return {
+        round,
+        new_phase: current?.phase || null
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Round phase initialized successfully',
+      new_phase: result.new_phase,
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester
+      }
+    });
+  } catch (error) {
+    console.error('Initialize round phase error:', error);
+    return res.status(400).json({ message: error.message || 'Error initializing round phase' });
   }
 });
 

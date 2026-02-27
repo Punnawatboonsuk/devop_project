@@ -11,6 +11,7 @@ const PHASE_LABELS = {
   CERTIFICATE: 'ช่วงออกประกาศนียบัตร'
 };
 
+const INITIAL_PHASE_OPTIONS = ['NOMINATION', 'REVIEW_END', 'VOTING', 'VOTING_END', 'CERTIFICATE'];
 const CURRENT_BUDDHIST_YEAR = new Date().getFullYear() + 543;
 const DEFAULT_YEAR = Math.min(3000, Math.max(2000, CURRENT_BUDDHIST_YEAR));
 
@@ -33,6 +34,7 @@ const VotingControl = () => {
     academic_year: DEFAULT_YEAR,
     semester: 1
   });
+  const [initialPhase, setInitialPhase] = useState('NOMINATION');
   const [confirmModal, setConfirmModal] = useState({
     open: false,
     action: null,
@@ -72,6 +74,22 @@ const VotingControl = () => {
 
       const phasePayload = await phaseResponse.json().catch(() => ({}));
       const ticketsPayload = await ticketsResponse.json().catch(() => ({}));
+
+      if (phaseResponse.status === 404) {
+        setPhase(null);
+        setRound({
+          id: null,
+          academic_year: year,
+          semester,
+          name: `Round ${year}/${semester}`
+        });
+        setStats({
+          reviewed_by_dean: 0,
+          approved_for_voting: 0,
+          announced: 0
+        });
+        return;
+      }
 
       if (!phaseResponse.ok) {
         throw new Error(phasePayload?.message || 'ไม่สามารถโหลดช่วงการลงคะแนนได้');
@@ -287,6 +305,57 @@ const VotingControl = () => {
     });
   };
 
+  const runInitializeRound = async () => {
+    const year = Number.parseInt(filters.academic_year, 10);
+    const semester = Number.parseInt(filters.semester, 10);
+    const validation = isValidYearSemester(year, semester);
+    if (!validation.ok) {
+      toast.error(validation.message);
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await authenticatedApiRequest('/api/admin/phase/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          academic_year: year,
+          semester,
+          phase: initialPhase
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || 'Unable to initialize round phase');
+      }
+      toast.success(payload?.message || 'Round phase initialized');
+      await fetchControlData({ academic_year: year, semester });
+    } catch (actionError) {
+      toast.error(actionError.message || 'Unable to initialize round phase');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openInitializeModal = () => {
+    const year = Number.parseInt(filters.academic_year, 10);
+    const semester = Number.parseInt(filters.semester, 10);
+    const validation = isValidYearSemester(year, semester);
+    if (!validation.ok) {
+      toast.error(validation.message);
+      return;
+    }
+
+    setConfirmModal({
+      open: true,
+      action: 'initialize',
+      title: 'Initialize Round',
+      message: `Initialize year ${year} / semester ${semester} at phase ${initialPhase}?`,
+      confirmText: 'Initialize'
+    });
+  };
+
   const openExportModal = () => {
     setConfirmModal({
       open: true,
@@ -323,6 +392,12 @@ const VotingControl = () => {
 
     if (confirmModal.action === 'certificate_export') {
       await exportCertificatePackage();
+      closeConfirmModal();
+      return;
+    }
+
+    if (confirmModal.action === 'initialize') {
+      await runInitializeRound();
       closeConfirmModal();
     }
   };
@@ -365,6 +440,18 @@ const VotingControl = () => {
                   <nextAction.icon size={16} />
                 )}
                 {nextAction.label}
+              </button>
+            )}
+            {!nextAction && !phase && (
+              <button
+                onClick={openInitializeModal}
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg font-semibold text-white bg-ku-main hover:bg-green-800 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {actionLoading && confirmModal.action === 'initialize' ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : null}
+                Initialize first phase
               </button>
             )}
             {phase === 'CERTIFICATE' && (
@@ -414,6 +501,22 @@ const VotingControl = () => {
               ใช้รอบนี้
             </button>
           </div>
+          {!phase && (
+            <label className="flex flex-col gap-1 md:col-span-2">
+              <span className="text-sm text-gray-600">Starting phase (new round)</span>
+              <select
+                value={initialPhase}
+                onChange={(e) => setInitialPhase(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2"
+              >
+                {INITIAL_PHASE_OPTIONS.map((item) => (
+                  <option key={item} value={item}>
+                    {item} ({PHASE_LABELS[item] || item})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       </div>
 

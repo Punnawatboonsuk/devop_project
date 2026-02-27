@@ -7,6 +7,10 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const { pool } = require('./database');
 
+const isProduction = process.env.NODE_ENV === 'production';
+const secureCookie = process.env.SESSION_COOKIE_SECURE === 'true'
+  || (isProduction && process.env.SESSION_COOKIE_SECURE !== 'false');
+
 const sessionConfig = {
   store: new pgSession({
     pool: pool,
@@ -19,7 +23,7 @@ const sessionConfig = {
   cookie: {
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: secureCookie,
     sameSite: 'lax'
   },
   name: 'nisit.sid'
