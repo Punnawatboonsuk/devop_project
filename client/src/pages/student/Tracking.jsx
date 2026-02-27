@@ -117,6 +117,10 @@ const Tracking = () => {
     });
   };
 
+  const proclamationResult = selectedTicket?.proclamation_result || null;
+  const isWinner = proclamationResult === 'winner';
+  const isNotSelected = proclamationResult === 'not_selected';
+
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
@@ -198,6 +202,17 @@ const Tracking = () => {
                 <div className="py-2">
                   <StatusTimeline currentStatus={selectedTicket.status} />
                 </div>
+
+                {(isWinner || isNotSelected) && (
+                  <div className={`mt-6 border rounded-xl p-4 ${isWinner ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                    <p className="font-bold">
+                      ผลการประกาศ: {isWinner ? 'ผ่านการคัดเลือก (ได้รับรางวัล)' : 'ไม่ผ่านการคัดเลือก'}
+                    </p>
+                    <p className="text-sm mt-1">
+                      ประกาศเมื่อ: {formatDate(selectedTicket.result_announced_at)}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">

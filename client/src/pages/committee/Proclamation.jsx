@@ -18,6 +18,7 @@ const Proclamation = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -31,8 +32,19 @@ const Proclamation = () => {
     history: []
   });
 
-  const isPresident = user?.primary_role === 'COMMITTEE_PRESIDENT';
+  const isPresident = useMemo(() => {
+    const roleList = Array.isArray(user?.roles) ? user.roles : [];
+    return (
+      user?.primary_role === 'COMMITTEE_PRESIDENT' ||
+      user?.role === 'COMMITTEE_PRESIDENT' ||
+      roleList.includes('COMMITTEE_PRESIDENT')
+    );
+  }, [user]);
   const canPublish = Boolean(data?.permissions?.can_publish) && isPresident;
+  const canViewCurrentResults = useMemo(() => {
+    const currentPhase = String(data?.phase || '').toUpperCase();
+    return ['VOTING', 'VOTING_END', 'CERTIFICATE'].includes(currentPhase);
+  }, [data?.phase]);
 
   const fetchProclamation = async () => {
     try {
@@ -109,6 +121,41 @@ const Proclamation = () => {
     }
   };
 
+  const handleExportCertificate = async () => {
+    if (!isPresident) {
+      toast.error('เฉพาะประธานคณะกรรมการเท่านั้น');
+      return;
+    }
+    if (data?.phase !== 'CERTIFICATE') {
+      toast.error(`ส่งออกไฟล์ได้เฉพาะช่วง CERTIFICATE (สถานะปัจจุบัน: ${data?.phase || 'NONE'})`);
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const response = await authenticatedApiRequest('/api/certificates/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          round_id: data?.round?.id || null
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || 'ไม่สามารถส่งออกไฟล์ประกาศได้');
+      }
+
+      toast.success(payload?.message || 'ส่งออกไฟล์ประกาศเรียบร้อย');
+      if (payload?.download_url) {
+        window.open(payload.download_url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (exportError) {
+      toast.error(exportError.message || 'ไม่สามารถส่งออกไฟล์ประกาศได้');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center gap-4">
@@ -132,6 +179,16 @@ const Proclamation = () => {
               ลงนามและประกาศผล
             </button>
           )}
+          {isPresident && (
+            <button
+              onClick={handleExportCertificate}
+              disabled={exporting || loading || data.phase !== 'CERTIFICATE'}
+              className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2 shadow hover:bg-blue-700 transition disabled:opacity-60"
+            >
+              {exporting ? <Loader2 size={18} className="animate-spin" /> : <FileCheck size={18} />}
+              ส่งออกไฟล์ประกาศ
+            </button>
+          )}
           <button
             onClick={() => setShowHistory(true)}
             className="bg-gray-500 text-white px-6 py-3 rounded-xl font-bold shadow hover:bg-gray-700 transition"
@@ -141,7 +198,7 @@ const Proclamation = () => {
         </div>
       </div>
 
-      {!canPublish && (
+      {!canPublish && !canViewCurrentResults && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-blue-700 text-sm">
           {isPresident
             ? `รอผู้ดูแลระบบปิดโหวตเป็น VOTING_END ก่อนจึงจะลงนามและประกาศผลได้ (สถานะปัจจุบัน: ${data.phase || 'NONE'})`
@@ -180,7 +237,7 @@ const Proclamation = () => {
         </div>
       )}
 
-      {!loading && !error && canPublish && (
+      {!loading && !error && canViewCurrentResults && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-6 border-b border-gray-100">
             <h3 className="font-bold text-gray-700">รายชื่อผู้ชนะที่เตรียมประกาศ</h3>
@@ -356,3 +413,4 @@ const Proclamation = () => {
 };
 
 export default Proclamation;
+

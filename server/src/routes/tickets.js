@@ -300,6 +300,10 @@ function hydrateTicketResponse(ticket) {
     db_status: ticket.status,
     round_id,
     reason_for_return: formData.reason_for_return || null,
+    proclamation_result:
+      formData.proclamation_result ||
+      (workflow_status === WORKFLOW_STATUS.ANNOUNCED ? 'winner' : null),
+    result_announced_at: formData.result_announced_at || formData.announced_at || null,
     submitted_at: formData.submitted_at || ticket.submitted_at,
     reviewed_at: ticket.reviewed_at,
     reviewed_by: ticket.reviewed_by || null,

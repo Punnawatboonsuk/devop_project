@@ -641,6 +641,9 @@ router.post('/proclamation/publish', [requirePublisherAuth, uploadSignatureMiddl
       const totalCommittee = await getCommitteeCount(client);
       const winnersResult = await getRoundWinners(client, round.id, totalCommittee);
       const winnerIds = winnersResult.winners.map((winner) => winner.id);
+      const winnerIdSet = new Set(winnerIds);
+      const allCandidates = await getRoundCandidates(client, { roundId: round.id });
+      const candidateIds = allCandidates.map((candidate) => candidate.id);
       const signatureMeta = {
         filename: req.file.filename,
         original_name: req.file.originalname,
@@ -649,7 +652,7 @@ router.post('/proclamation/publish', [requirePublisherAuth, uploadSignatureMiddl
         file_path: req.file.path
       };
 
-      for (const ticketId of winnerIds) {
+      for (const ticketId of candidateIds) {
         const currentTicket = await client.query(
           `SELECT form_data
            FROM tickets
@@ -658,20 +661,37 @@ router.post('/proclamation/publish', [requirePublisherAuth, uploadSignatureMiddl
         );
         const formData = currentTicket.rows[0]?.form_data || {};
         const statusLog = Array.isArray(formData.status_log) ? formData.status_log : [];
-        statusLog.push({
-          action: 'announce',
-          status: 'announced',
-          actor_id: req.session.user_id,
-          actor_role: ROLES.COMMITTEE_PRESIDENT,
-          timestamp: new Date().toISOString(),
-          remark: 'Published through committee proclamation with president signature',
-          signature_file: signatureMeta
-        });
+        const isWinner = winnerIdSet.has(ticketId);
+        const timestamp = new Date().toISOString();
+
+        statusLog.push(
+          isWinner
+            ? {
+              action: 'announce',
+              status: 'announced',
+              actor_id: req.session.user_id,
+              actor_role: ROLES.COMMITTEE_PRESIDENT,
+              timestamp,
+              remark: 'Published through committee proclamation with president signature',
+              signature_file: signatureMeta
+            }
+            : {
+              action: 'declare_result',
+              status: formData.workflow_status || 'approved',
+              actor_id: req.session.user_id,
+              actor_role: ROLES.COMMITTEE_PRESIDENT,
+              timestamp,
+              remark: 'Declared as not selected in committee proclamation.',
+              signature_file: signatureMeta
+            }
+        );
 
         const nextFormData = {
           ...formData,
-          workflow_status: 'announced',
-          announced_at: new Date().toISOString(),
+          workflow_status: isWinner ? 'announced' : (formData.workflow_status || 'approved'),
+          announced_at: isWinner ? timestamp : (formData.announced_at || null),
+          proclamation_result: isWinner ? 'winner' : 'not_selected',
+          result_announced_at: timestamp,
           proclamation_signature: signatureMeta,
           status_log: statusLog
         };
@@ -691,6 +711,7 @@ router.post('/proclamation/publish', [requirePublisherAuth, uploadSignatureMiddl
         newValues: {
           round_id: round.id,
           winners_count: winnerIds.length,
+          declared_count: candidateIds.length,
           winner_ticket_ids: winnerIds,
           signed_by: req.session.user_id,
           signature_file: signatureMeta

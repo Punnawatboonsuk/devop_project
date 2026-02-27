@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, FileText, CheckSquare, Users, BarChart, LogOut, Settings, UserPlus } from 'lucide-react';
+import { Home, FileText, CheckSquare, Users, BarChart, LogOut, UserPlus } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom'; // เพิ่ม useNavigate
 import { useAuth } from '../hooks/useAuth'; // ✅ 1. Import AuthContext
 
@@ -78,10 +78,6 @@ const Sidebar = ({ role = 'STUDENT' }) => {
 
       {/* Footer */}
       <div className="p-4 border-t border-white/10 space-y-2">
-        <button className="flex items-center gap-3 px-4 py-2 w-full text-left rounded-lg hover:bg-white/5 text-sm text-green-200 transition-colors">
-            <Settings size={18} />
-            <span>ตั้งค่า</span>
-        </button>
         
         {/* ✅ 3. ผูกปุ่ม Logout กับฟังก์ชัน */}
         <button 

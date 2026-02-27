@@ -1,8 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Bell } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { authenticatedApiRequest } from '../utils/api';
 import { getRoleLabel } from '../utils/roleLabels';
+
+const PHASE_LABELS = {
+  NOMINATION: 'เปิดรับสมัคร',
+  REVIEW_END: 'รอตรวจสอบ',
+  VOTING: 'เปิดโหวต',
+  VOTING_END: 'ปิดโหวต',
+  CERTIFICATE: 'ออกใบประกาศ'
+};
 
 const Navbar = () => {
   const { user } = useAuth();
@@ -46,20 +53,22 @@ const Navbar = () => {
     return parts.map((part) => part[0]?.toUpperCase() || '').join('') || 'U';
   }, [user?.fullname]);
 
+  const phaseLabel = useMemo(() => {
+    const code = String(phase || '').toUpperCase();
+    if (!code) return '';
+    return PHASE_LABELS[code] ? `${code} (${PHASE_LABELS[code]})` : code;
+  }, [phase]);
+
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 fixed top-0 left-64 right-0 z-40">
       {/* Left: Breadcrumb or Title (Optional) */}
       <div className="text-sm text-gray-500">
         {academicLabel}
-        <span className="text-ku-main font-semibold">{phase ? ` - ${phase}` : ''}</span>
+        <span className="text-ku-main font-semibold">{phaseLabel ? ` - ${phaseLabel}` : ''}</span>
       </div>
 
       {/* Right: User Profile */}
       <div className="flex items-center gap-6">
-        <button className="relative p-2 text-gray-500 hover:bg-gray-100 rounded-full transition">
-          <Bell size={20} />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-        </button>
         
         <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
           <div className="text-right hidden sm:block">

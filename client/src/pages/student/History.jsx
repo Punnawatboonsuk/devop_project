@@ -67,6 +67,17 @@ const StudentHistory = () => {
     });
   };
 
+  const renderProclamationResult = (ticket) => {
+    const result = ticket?.proclamation_result;
+    if (result === 'winner') {
+      return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">ได้รับรางวัล</span>;
+    }
+    if (result === 'not_selected') {
+      return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">ไม่ผ่านการคัดเลือก</span>;
+    }
+    return <span className="text-xs text-gray-400">รอประกาศผล</span>;
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-10">
       <div className="flex flex-col md:flex-row justify-between items-end gap-4">
@@ -109,6 +120,7 @@ const StudentHistory = () => {
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">ใบสมัคร</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">วันที่ส่ง</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">สถานะ</th>
+              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">ผลประกาศ</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-right">การดำเนินการ</th>
             </tr>
           </thead>
@@ -132,6 +144,9 @@ const StudentHistory = () => {
                   <td className="px-6 py-4">
                     <StatusBadge status={ticket.status} />
                   </td>
+                  <td className="px-6 py-4">
+                    {renderProclamationResult(ticket)}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <Link
                       to={`/student/ticket/${ticket.id}`}
@@ -145,7 +160,7 @@ const StudentHistory = () => {
             ) : (
               !loading && (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan="6" className="px-6 py-12 text-center text-gray-400">
                     ไม่พบประวัติใบสมัคร
                   </td>
                 </tr>

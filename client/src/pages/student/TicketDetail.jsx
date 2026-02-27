@@ -72,6 +72,10 @@ const TicketDetail = () => {
     return '-';
   };
 
+  const proclamationResult = ticket?.proclamation_result || null;
+  const isWinner = proclamationResult === 'winner';
+  const isNotSelected = proclamationResult === 'not_selected';
+
   return (
     <div className="max-w-4xl mx-auto pb-10 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -116,6 +120,17 @@ const TicketDetail = () => {
               )}
             </div>
           </div>
+
+          {(isWinner || isNotSelected) && (
+            <div className={`mb-6 border rounded-xl p-4 ${isWinner ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+              <p className="font-bold">
+                ผลการประกาศ: {isWinner ? 'ผ่านการคัดเลือก (ได้รับรางวัล)' : 'ไม่ผ่านการคัดเลือก'}
+              </p>
+              <p className="text-sm mt-1">
+                ประกาศเมื่อ: {formatDate(ticket.result_announced_at)}
+              </p>
+            </div>
+          )}
 
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 mb-8 space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-2 border-b border-gray-200">

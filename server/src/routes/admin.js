@@ -684,6 +684,56 @@ router.get('/phase/current', requireAdminAuth, async (req, res) => {
 });
 
 /**
+ * POST /api/admin/phase/start-certificate
+ * Moves system from VOTING_END to CERTIFICATE phase
+ */
+router.post('/phase/start-certificate', requireAdminAuth, async (req, res) => {
+  try {
+    const result = await transaction(async (client) => {
+      const round = await resolveRound(client, req.body);
+      if (!round) {
+        throw new Error('Round not found');
+      }
+
+      const currentPhase = await getCurrentPhaseForRound(client, round.id);
+      if (!currentPhase || currentPhase.phase !== PHASES.VOTING_END) {
+        throw new Error(`Cannot start certificate phase. Current phase is ${currentPhase?.phase || 'NONE'}`);
+      }
+
+      const next = await advancePhase(client, round.id, PHASES.CERTIFICATE, req.session.user_id, 'Certificate phase started');
+
+      await createAuditLog(client, req.session.user_id, LOG_ACTIONS.PHASE_CHANGE, {
+        resourceType: 'round_phase_history',
+        resourceId: round.id,
+        newValues: {
+          round_id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          old_phase: PHASES.VOTING_END,
+          new_phase: next.phase
+        }
+      });
+
+      return { success: true, round, new_phase: next.phase };
+    });
+
+    return res.status(200).json({
+      message: 'Certificate phase started',
+      success: true,
+      new_phase: result.new_phase,
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester
+      }
+    });
+  } catch (error) {
+    console.error('Start certificate phase error:', error);
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+/**
  * GET /api/admin/statistics - Get system statistics
  */
 router.get('/statistics', requireAdminAuth, async (req, res) => {

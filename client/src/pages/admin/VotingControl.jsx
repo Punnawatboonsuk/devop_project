@@ -169,6 +169,14 @@ const VotingControl = () => {
         icon: Square
       };
     }
+    if (phase === 'VOTING_END') {
+      return {
+        endpoint: '/api/admin/phase/start-certificate',
+        confirm: 'ยืนยันเข้าสู่ช่วง CERTIFICATE ใช่หรือไม่?',
+        label: 'เริ่มช่วงออกใบประกาศ',
+        icon: Play
+      };
+    }
     return null;
   }, [phase]);
 
@@ -219,6 +227,36 @@ const VotingControl = () => {
     }
   };
 
+  const exportCertificatePackage = async () => {
+    const year = Number.parseInt(filters.academic_year, 10);
+    const semester = Number.parseInt(filters.semester, 10);
+
+    setActionLoading(true);
+    try {
+      const response = await authenticatedApiRequest('/api/certificates/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          academic_year: year,
+          semester
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.message || 'ไม่สามารถสร้างเอกสารประกาศผลได้');
+      }
+
+      toast.success(payload?.message || 'สร้างเอกสารประกาศผลเรียบร้อย');
+      if (payload?.download_url) {
+        window.open(payload.download_url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (actionError) {
+      toast.error(actionError.message || 'ไม่สามารถสร้างเอกสารประกาศผลได้');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const openApplyModal = () => {
     const nextYear = Number.parseInt(draftFilters.academic_year, 10);
     const nextSemester = Number.parseInt(draftFilters.semester, 10);
@@ -249,6 +287,16 @@ const VotingControl = () => {
     });
   };
 
+  const openExportModal = () => {
+    setConfirmModal({
+      open: true,
+      action: 'certificate_export',
+      title: 'สร้างและส่งออกไฟล์ประกาศ',
+      message: `ยืนยันสร้างไฟล์ประกาศรอบ ปีการศึกษา ${filters.academic_year} / ภาคเรียน ${filters.semester} ใช่หรือไม่?`,
+      confirmText: 'ยืนยันส่งออกไฟล์'
+    });
+  };
+
   const closeConfirmModal = () => {
     if (actionLoading) return;
     setConfirmModal({
@@ -269,6 +317,12 @@ const VotingControl = () => {
 
     if (confirmModal.action === 'phase') {
       await runPhaseAction();
+      closeConfirmModal();
+      return;
+    }
+
+    if (confirmModal.action === 'certificate_export') {
+      await exportCertificatePackage();
       closeConfirmModal();
     }
   };
@@ -311,6 +365,18 @@ const VotingControl = () => {
                   <nextAction.icon size={16} />
                 )}
                 {nextAction.label}
+              </button>
+            )}
+            {phase === 'CERTIFICATE' && (
+              <button
+                onClick={openExportModal}
+                disabled={actionLoading}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {actionLoading && confirmModal.action === 'certificate_export' ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : null}
+                ส่งออกไฟล์ประกาศ
               </button>
             )}
           </div>
@@ -414,7 +480,7 @@ const VotingControl = () => {
                 disabled={actionLoading}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ku-main text-white hover:bg-green-800 disabled:opacity-60"
               >
-                {actionLoading && confirmModal.action === 'phase' ? (
+                {actionLoading && (confirmModal.action === 'phase' || confirmModal.action === 'certificate_export') ? (
                   <Loader2 size={16} className="animate-spin" />
                 ) : null}
                 {confirmModal.confirmText}
