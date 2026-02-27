@@ -100,22 +100,64 @@ app.use('/api/certificates', certificateRoutes);
 // Get current phase (public endpoint)
 app.get('/api/phase/current', async (req, res) => {
   try {
-    const { query } = require('./src/config/database');
-    const result = await query(
-      'SELECT phase, is_active, started_at FROM phases WHERE is_active = true LIMIT 1'
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'No active phase found',
-      });
-    }
+    const { pool } = require('./src/config/database');
+    const {
+      getRoundByAcademic,
+      getActiveRound,
+      getCurrentPhaseForRound
+    } = require('./src/services/roundPhase');
 
-    return res.json({
-      success: true,
-      phase: result.rows[0],
-    });
+    const client = await pool.connect();
+    try {
+      const year = Number.parseInt(req.query.year, 10);
+      const semester = Number.parseInt(req.query.semester, 10);
+
+      let round = null;
+      if (!Number.isNaN(year) && [1, 2].includes(semester)) {
+        round = await getRoundByAcademic(client, year, semester);
+      } else {
+        round = await getActiveRound(client);
+      }
+
+      if (!round) {
+        return res.status(404).json({
+          success: false,
+          message: 'No active round found',
+        });
+      }
+
+      const phase = await getCurrentPhaseForRound(client, round.id);
+      if (!phase) {
+        return res.status(404).json({
+          success: false,
+          message: 'No active phase found for round',
+          round: {
+            id: round.id,
+            academic_year: round.academic_year,
+            semester: round.semester,
+            name: round.name
+          }
+        });
+      }
+
+      return res.json({
+        success: true,
+        round: {
+          id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          name: round.name
+        },
+        phase: {
+          phase: phase.phase,
+          started_at: phase.started_at,
+          started_by: phase.started_by,
+          notes: phase.notes || null
+        },
+      });
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('Get current phase error:', error);
     return res.status(500).json({

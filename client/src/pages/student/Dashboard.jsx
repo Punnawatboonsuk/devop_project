@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, FileText, Clock, CheckCircle, AlertTriangle, Edit, Lock, XCircle, RefreshCw } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Plus, FileText, Clock, CheckCircle, Lock, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { authenticatedApiRequest } from '../../utils/api';
+import StatusBadge from '../../components/StatusBadge';
 
 const StatCard = ({ title, value, icon: Icon, color }) => (
   <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
@@ -15,55 +16,44 @@ const StatCard = ({ title, value, icon: Icon, color }) => (
   </div>
 );
 
+const CLOSED_PHASES = new Set(['CLOSED_NOMINATION', 'REVIEW_END', 'VOTING', 'VOTING_END', 'CERTIFICATE']);
+const PENDING_STATUSES = new Set(['submitted_by_student', 'reviewed_by_staff', 'reviewed_by_subdean', 'reviewed_by_dean']);
+const ACTIVE_STATUSES = new Set(['draft', 'submitted_by_student', 'reviewed_by_staff', 'reviewed_by_subdean', 'reviewed_by_dean', 'approved', 'returned']);
+const EDITABLE_STATUSES = new Set(['draft', 'returned']);
+
 const StudentDashboard = () => {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  
-  // State for system and ticket data
   const [systemPhase, setSystemPhase] = useState(null);
-  const [activeTicket, setActiveTicket] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [user, setUser] = useState(null);
 
-  // Fetch system phase, user info, and user tickets
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
 
-        // Fetch user info
-        const userResponse = await authenticatedApiRequest('/api/auth/me');
+        const [userResponse, phaseResponse, ticketsResponse] = await Promise.all([
+          authenticatedApiRequest('/api/auth/me'),
+          authenticatedApiRequest('/api/auth/phase'),
+          authenticatedApiRequest('/api/tickets/me')
+        ]);
+
         if (userResponse.ok) {
           const userData = await userResponse.json();
           setUser(userData.user);
         }
 
-        // Fetch system phase
-        const phaseResponse = await authenticatedApiRequest('/api/auth/phase');
         if (phaseResponse.ok) {
           const phaseData = await phaseResponse.json();
           setSystemPhase(phaseData.phase);
         }
 
-        // Fetch user tickets
-        const ticketsResponse = await authenticatedApiRequest('/api/tickets/me');
         if (ticketsResponse.ok) {
           const ticketsData = await ticketsResponse.json();
-          setTickets(ticketsData.tickets || []);
-          
-          // Find active ticket (most recent or current)
-          const active = ticketsData.tickets?.find(ticket => 
-            ticket.status === 'DRAFT' || 
-            ticket.status === 'SUBMITTED_BY_STUDENT' || 
-            ticket.status === 'REVIEWED_BY_STAFF' || 
-            ticket.status === 'REVIEWED_BY_SUBDEAN' || 
-            ticket.status === 'REVIEWED_BY_DEAN' || 
-            ticket.status === 'APPROVED'
-          );
-          setActiveTicket(active || null);
+          setTickets(Array.isArray(ticketsData.tickets) ? ticketsData.tickets : []);
         }
-      } catch (err) {
-        console.error('Dashboard fetch error:', err);
+      } catch (error) {
+        console.error('Dashboard fetch error:', error);
       } finally {
         setLoading(false);
       }
@@ -72,141 +62,93 @@ const StudentDashboard = () => {
     fetchData();
   }, []);
 
-  // Calculate statistics
+  const sortedTickets = useMemo(
+    () => [...tickets].sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at)),
+    [tickets]
+  );
+
+  const activeTicket = useMemo(
+    () => sortedTickets.find((ticket) => ACTIVE_STATUSES.has(String(ticket.status || '').toLowerCase())) || null,
+    [sortedTickets]
+  );
+
   const totalTickets = tickets.length;
-  const pendingTickets = tickets.filter(t => 
-    t.status === 'SUBMITTED_BY_STUDENT' || 
-    t.status === 'REVIEWED_BY_STAFF' || 
-    t.status === 'REVIEWED_BY_SUBDEAN' || 
-    t.status === 'REVIEWED_BY_DEAN'
-  ).length;
-  const approvedTickets = tickets.filter(t => t.status === 'APPROVED').length;
+  const pendingTickets = tickets.filter((t) => PENDING_STATUSES.has(String(t.status || '').toLowerCase())).length;
+  const approvedTickets = tickets.filter((t) => String(t.status || '').toLowerCase() === 'approved').length;
 
-  // ฟังก์ชันเช็คปุ่ม "สร้างใบสมัครใหม่"
-  const renderApplyButton = () => {
-    if (loading) {
-      return (
-        <button disabled className="flex items-center gap-2 bg-gray-200 text-gray-500 px-5 py-2.5 rounded-lg cursor-not-allowed font-medium shadow-sm">
-          <RefreshCw size={18} className="animate-spin" /> กำลังโหลด...
-        </button>
-      );
-    }
+  const canCreateNewTicket =
+    !loading &&
+    !CLOSED_PHASES.has(String(systemPhase || '').toUpperCase()) &&
+    (!activeTicket || ['rejected', 'returned', 'not_approved', 'expired', 'dq'].includes(String(activeTicket.status || '').toLowerCase()));
 
-    if (systemPhase === 'CLOSED_NOMINATION' || systemPhase === 'REVIEW_END' || systemPhase === 'VOTING' || systemPhase === 'VOTING_END' || systemPhase === 'CERTIFICATE') {
-      return (
-        <button disabled className="flex items-center gap-2 bg-gray-200 text-gray-500 px-5 py-2.5 rounded-lg cursor-not-allowed font-medium shadow-sm">
-          <Lock size={18} /> ปิดรับการเสนอชื่อ
-        </button>
-      );
-    }
-    
-    if (activeTicket && activeTicket.status !== 'REJECTED') {
-      // ถ้ามีใบสมัครอยู่แล้วและไม่ใช่ rejected ให้ซ่อนปุ่มเพื่อกันการส่งซ้ำ
-      return null; 
-    }
-    
-    return (
-      <Link to="/student/create" className="flex items-center gap-2 bg-ku-main text-white px-5 py-2.5 rounded-lg hover:bg-green-800 transition shadow-md font-medium">
-        <Plus size={20} />
-        <span>สร้างใบเสนอชื่อ (New Application)</span>
-      </Link>
-    );
+  const formatDate = (value) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '-';
+    return parsed.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: '2-digit' });
   };
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-10">
-      {/* --- Header Section --- */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            สวัสดี, {user?.fullname || 'นิสิต'} 👋
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-800">ยินดีต้อนรับ, {user?.fullname || 'นิสิต'}</h1>
           <p className="text-gray-500 mt-1 flex items-center gap-2">
-            <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded text-gray-600">
-              {user?.ku_id || 'ไม่ระบุ'}
-            </span>
-            {user?.faculty || 'ไม่ระบุ'} • {user?.department || 'ไม่ระบุ'}
+            <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded text-gray-600">{user?.ku_id || '-'}</span>
+            {user?.faculty || '-'} | {user?.department || '-'}
           </p>
         </div>
         <div>
-          {renderApplyButton()}
+          {loading ? (
+            <button disabled className="flex items-center gap-2 bg-gray-200 text-gray-500 px-5 py-2.5 rounded-lg cursor-not-allowed font-medium shadow-sm">
+              <RefreshCw size={18} className="animate-spin" /> กำลังโหลด...
+            </button>
+          ) : CLOSED_PHASES.has(String(systemPhase || '').toUpperCase()) ? (
+            <button disabled className="flex items-center gap-2 bg-gray-200 text-gray-500 px-5 py-2.5 rounded-lg cursor-not-allowed font-medium shadow-sm">
+              <Lock size={18} /> ปิดรับสมัครแล้ว
+            </button>
+          ) : canCreateNewTicket ? (
+            <Link to="/student/create" className="flex items-center gap-2 bg-ku-main text-white px-5 py-2.5 rounded-lg hover:bg-green-800 transition shadow-md font-medium">
+              <Plus size={20} />
+              <span>สร้างใบสมัครใหม่</span>
+            </Link>
+          ) : null}
         </div>
       </div>
 
-      {/* --- Alert Section (แสดงเมื่อโดน Reject) --- */}
-      {activeTicket?.status === 'reject' && (
-        <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-6 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-2 h-full bg-red-500"></div>
-          <div className="flex items-start gap-4">
-            <div className="bg-red-100 p-3 rounded-full text-red-600 shrink-0 mt-1">
-              <AlertTriangle size={24} />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-red-800">ใบสมัครของคุณถูกส่งกลับเพื่อแก้ไข!</h3>
-              <p className="text-red-600 text-sm mt-1">โปรดตรวจสอบข้อเสนอแนะด้านล่าง และทำการแก้ไขเอกสารให้สมบูรณ์เพื่อส่งพิจารณาอีกครั้ง</p>
-              
-              <div className="mt-4 bg-white p-4 rounded-xl border border-red-100 shadow-sm">
-                <p className="text-sm font-bold text-gray-800">เหตุผลที่ถูกตีกลับ:</p>
-                <p className="text-gray-600 text-sm mt-1 leading-relaxed">"{activeTicket.rejectReason}"</p>
-                <p className="text-xs text-gray-400 mt-3 font-medium">ส่งกลับโดย: {activeTicket.rejectedBy}</p>
-              </div>
-
-              <div className="mt-4">
-                <button 
-                  onClick={() => navigate(`/student/edit/${activeTicket.id}`)}
-                  className="flex items-center gap-2 bg-red-600 text-white px-6 py-2.5 rounded-lg hover:bg-red-700 transition shadow-md font-bold text-sm"
-                >
-                  <Edit size={16} /> ดำเนินการแก้ไขใบสมัคร (Edit Ticket)
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- Stats Grid --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="ประวัติการส่งทั้งหมด" value={totalTickets} icon={FileText} color="bg-blue-50 text-blue-600" />
-        <StatCard title="รอการตรวจสอบ" value={pendingTickets} icon={Clock} color="bg-orange-50 text-orange-600" />
-        <StatCard title="อนุมัติแล้ว" value={approvedTickets} icon={CheckCircle} color="bg-green-50 text-green-600" />
+        <StatCard title="ส่งใบสมัครทั้งหมด" value={totalTickets} icon={FileText} color="bg-blue-50 text-blue-600" />
+        <StatCard title="รอตรวจสอบ" value={pendingTickets} icon={Clock} color="bg-orange-50 text-orange-600" />
+        <StatCard title="ผ่านอนุมัติ" value={approvedTickets} icon={CheckCircle} color="bg-green-50 text-green-600" />
       </div>
 
-      {/* --- Active Application Card --- */}
       {activeTicket && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
-              <FileText size={18} className="text-ku-main"/> รายการที่กำลังดำเนินการ (Active Ticket)
+              <FileText size={18} className="text-ku-main" /> ใบสมัครล่าสุด
             </h3>
             <Link to="/student/tracking" className="text-sm font-bold text-ku-main hover:underline bg-ku-light px-4 py-1.5 rounded-lg">
               ติดตามสถานะ
             </Link>
           </div>
           <div className="p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
-            <div className={`w-14 h-14 rounded-xl flex items-center justify-center font-bold text-xl border-2 shrink-0
-              ${activeTicket.status === 'reject' ? 'bg-red-50 text-red-500 border-red-100' : 
-                activeTicket.status === 'approved' ? 'bg-green-50 text-green-500 border-green-100' : 
-                'bg-blue-50 text-blue-500 border-blue-100'}`}>
-              {activeTicket.category.charAt(0)}
-            </div>
             <div className="flex-1">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{activeTicket.category}</span>
-              <h4 className="font-bold text-gray-800 text-lg leading-tight mt-1">{activeTicket.title}</h4>
-              <p className="text-sm text-gray-400 font-mono mt-1">Ticket ID: {activeTicket.id}</p>
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">{activeTicket.award_type || '-'}</span>
+              <h4 className="font-bold text-gray-800 text-lg leading-tight mt-1">ใบสมัคร #{activeTicket.id}</h4>
+              <p className="text-sm text-gray-400 mt-1">
+                อัปเดตล่าสุด: {formatDate(activeTicket.updated_at || activeTicket.created_at)}
+              </p>
+              {EDITABLE_STATUSES.has(String(activeTicket.status || '').toLowerCase()) && (
+                <Link
+                  to={`/student/edit/${activeTicket.id}`}
+                  className="inline-flex items-center mt-3 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition text-sm font-bold"
+                >
+                  ดำเนินการแก้ไขต่อ
+                </Link>
+              )}
             </div>
-            <div className="text-right">
-              {/* Status Badge */}
-              <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border
-                ${activeTicket.status === 'reject' ? 'bg-red-50 text-red-700 border-red-200' : 
-                  activeTicket.status === 'approved' ? 'bg-green-50 text-green-700 border-green-200' : 
-                  'bg-orange-50 text-orange-700 border-orange-200'}`}>
-                {activeTicket.status === 'reject' ? <XCircle size={14}/> : 
-                 activeTicket.status === 'approved' ? <CheckCircle size={14}/> : <Clock size={14}/>}
-                {activeTicket.status === 'reject' ? 'รอการแก้ไข' : 
-                 activeTicket.status === 'approved' ? 'ผ่านการอนุมัติ' : 'รอการตรวจสอบ (Pending)'}
-              </div>
-              <p className="text-xs text-gray-400 mt-2">อัปเดตล่าสุด: {activeTicket.lastUpdate}</p>
-            </div>
+            <StatusBadge status={activeTicket.status} />
           </div>
         </div>
       )}

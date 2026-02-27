@@ -7,17 +7,17 @@ const StudentHistory = ({ studentId }) => {
     {
       id: 'TKT-2023-005',
       year: '2023',
-      category: 'Academic',
+      category: 'ด้านวิชาการ',
       status: 'approved',
-      result: 'Winner',
+      result: 'ได้รับรางวัล',
       date: '10 Feb 2023'
     },
     {
       id: 'TKT-2024-001',
       year: '2024',
-      category: 'Innovation',
+      category: 'ด้านนวัตกรรม',
       status: 'reject',
-      result: 'Document Missing',
+      result: 'เอกสารไม่ครบถ้วน',
       date: '15 Jan 2024'
     }
   ];
@@ -33,7 +33,7 @@ const StudentHistory = ({ studentId }) => {
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6">
       <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-        <History size={20} className="text-ku-main" /> ประวัติการสมัครของนิสิต (Student History)
+        <History size={20} className="text-ku-main" /> ประวัติการสมัครของนิสิต
       </h3>
 
       <div className="space-y-4">
@@ -45,7 +45,7 @@ const StudentHistory = ({ studentId }) => {
                 <p className="text-sm font-bold text-gray-800">{item.category}</p>
                 <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{item.year}</span>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Status: <span className="capitalize">{item.status}</span></p>
+              <p className="text-xs text-gray-500 mt-1">สถานะ: <span className="capitalize">{item.status}</span></p>
               
               {/* กรณีถูก Reject หรือได้รางวัล ให้แสดงเหตุผล/ผลลัพธ์ */}
               {item.result && (

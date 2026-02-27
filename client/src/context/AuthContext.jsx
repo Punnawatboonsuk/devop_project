@@ -60,16 +60,16 @@ const AuthProvider = ({ children }) => {
 
       if (response.ok) {
         setUser(data.user);
-        toast.success('Login successful');
+        toast.success('เข้าสู่ระบบสำเร็จ');
         return { success: true, redirect: data.redirect };
       } else {
-        toast.error(data.message || 'Login failed');
+        toast.error(data.message || 'เข้าสู่ระบบไม่สำเร็จ');
         return { success: false, message: data.message };
       }
     } catch (error) {
       console.error('Login error:', error);
-      toast.error('Network error. Please try again.');
-      return { success: false, message: 'Network error' };
+      toast.error('เกิดข้อผิดพลาดเครือข่าย กรุณาลองใหม่');
+      return { success: false, message: 'เกิดข้อผิดพลาดเครือข่าย' };
     } finally {
       setLoading(false);
     }
@@ -90,16 +90,16 @@ const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success('Registration successful! Please login.');
+        toast.success('สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ');
         return { success: true };
       } else {
-        toast.error(data.message || 'Registration failed');
+        toast.error(data.message || 'สมัครสมาชิกไม่สำเร็จ');
         return { success: false, message: data.message };
       }
     } catch (error) {
       console.error('Registration error:', error);
-      toast.error('Network error. Please try again.');
-      return { success: false, message: 'Network error' };
+      toast.error('เกิดข้อผิดพลาดเครือข่าย กรุณาลองใหม่');
+      return { success: false, message: 'เกิดข้อผิดพลาดเครือข่าย' };
     } finally {
       setLoading(false);
     }
@@ -112,10 +112,10 @@ const AuthProvider = ({ children }) => {
         method: 'POST',
       });
       setUser(null);
-      toast.success('Logged out successfully');
+      toast.success('ออกจากระบบเรียบร้อย');
     } catch (error) {
       console.error('Logout error:', error);
-      toast.error('Logout failed');
+      toast.error('ออกจากระบบไม่สำเร็จ');
     }
   };
 
@@ -133,16 +133,16 @@ const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (response.ok) {
-        toast.success('Password changed successfully');
+        toast.success('เปลี่ยนรหัสผ่านสำเร็จ');
         return { success: true };
       } else {
-        toast.error(data.message || 'Failed to change password');
+        toast.error(data.message || 'เปลี่ยนรหัสผ่านไม่สำเร็จ');
         return { success: false, message: data.message };
       }
     } catch (error) {
       console.error('Change password error:', error);
-      toast.error('Network error. Please try again.');
-      return { success: false, message: 'Network error' };
+      toast.error('เกิดข้อผิดพลาดเครือข่าย กรุณาลองใหม่');
+      return { success: false, message: 'เกิดข้อผิดพลาดเครือข่าย' };
     }
   };
 
@@ -160,16 +160,16 @@ const AuthProvider = ({ children }) => {
 
       if (response.ok) {
         setUser(data.user);
-        toast.success('Profile completed successfully');
+        toast.success('บันทึกข้อมูลโปรไฟล์สำเร็จ');
         return { success: true, redirect: data.redirect };
       }
 
-      toast.error(data.message || 'Failed to complete profile');
-      return { success: false, message: data.message || 'Failed to complete profile' };
+      toast.error(data.message || 'บันทึกข้อมูลโปรไฟล์ไม่สำเร็จ');
+      return { success: false, message: data.message || 'บันทึกข้อมูลโปรไฟล์ไม่สำเร็จ' };
     } catch (error) {
       console.error('Complete profile error:', error);
-      toast.error('Network error. Please try again.');
-      return { success: false, message: 'Network error' };
+      toast.error('เกิดข้อผิดพลาดเครือข่าย กรุณาลองใหม่');
+      return { success: false, message: 'เกิดข้อผิดพลาดเครือข่าย' };
     }
   };
 
@@ -180,27 +180,27 @@ const AuthProvider = ({ children }) => {
       
       // Handle 401 errors (unauthorized)
       if (response.status === 401) {
-        toast.error('Google authentication failed. Please try again.');
-        return { success: false, message: 'Authentication failed' };
+        toast.error('ยืนยันตัวตนด้วย Google ไม่สำเร็จ กรุณาลองใหม่');
+        return { success: false, message: 'ยืนยันตัวตนไม่สำเร็จ' };
       }
       
       const data = await response.json();
 
       if (response.ok && data.success) {
         setUser(data.user);
-        toast.success('Google SSO login successful');
+        toast.success('เข้าสู่ระบบด้วย Google SSO สำเร็จ');
         
         // For OAuth callbacks, we should redirect immediately
         // This method is typically called from GoogleCallback.jsx which handles the redirect
         return { success: true, redirect: data.redirect };
       } else {
-        toast.error(data.message || 'Google authentication failed');
-        return { success: false, message: data.message || 'Authentication failed' };
+        toast.error(data.message || 'ยืนยันตัวตนด้วย Google ไม่สำเร็จ');
+        return { success: false, message: data.message || 'ยืนยันตัวตนไม่สำเร็จ' };
       }
     } catch (error) {
       console.error('Google callback error:', error);
-      toast.error('Network error. Please try again.');
-      return { success: false, message: 'Network error' };
+      toast.error('เกิดข้อผิดพลาดเครือข่าย กรุณาลองใหม่');
+      return { success: false, message: 'เกิดข้อผิดพลาดเครือข่าย' };
     }
   };
 

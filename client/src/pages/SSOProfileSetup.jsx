@@ -38,7 +38,7 @@ const SSOProfileSetup = () => {
     setError('');
 
     if (!form.ku_id.trim() || !form.faculty.trim() || !form.department.trim()) {
-      setError('Please fill KU ID, faculty, and department');
+      setError('กรุณากรอกรหัสนิสิต คณะ และภาควิชาให้ครบ');
       return;
     }
 
@@ -53,7 +53,7 @@ const SSOProfileSetup = () => {
     if (result.success) {
       navigate(result.redirect || '/student/dashboard', { replace: true });
     } else {
-      setError(result.message || 'Failed to complete profile');
+      setError(result.message || 'บันทึกข้อมูลโปรไฟล์ไม่สำเร็จ');
     }
   };
 
@@ -62,28 +62,28 @@ const SSOProfileSetup = () => {
       <div className="absolute top-6 left-8 flex items-center">
         <img src={KULogo} alt="KU Logo" className="w-12 h-12 mr-3" />
         <div>
-          <span className="text-[#1a7f42] font-bold text-xl">Kasetsart University</span>
-          <div className="text-[#1a7f42] text-sm opacity-80">Faculty of Science</div>
+          <span className="text-[#1a7f42] font-bold text-xl">มหาวิทยาลัยเกษตรศาสตร์</span>
+          <div className="text-[#1a7f42] text-sm opacity-80">คณะวิทยาศาสตร์</div>
         </div>
       </div>
 
-      <div className="absolute top-6 right-8 text-gray-400 text-sm select-none">TH / EN</div>
+      <div className="absolute top-6 right-8 text-gray-400 text-sm select-none">ภาษาไทย</div>
 
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md flex flex-col items-center">
-        <h2 className="text-2xl font-bold text-gray-800 mb-1 text-center">Complete Student Profile</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-1 text-center">กรอกข้อมูลนิสิตให้ครบถ้วน</h2>
         <p className="text-green-700 text-sm text-center mb-6">
-          Welcome, {user.fullname || user.email}
+          ยินดีต้อนรับ, {user.fullname || user.email}
           <br />
-          <span className="font-semibold text-green-800">Please complete required student information</span>
+          <span className="font-semibold text-green-800">กรุณากรอกข้อมูลนิสิตที่จำเป็น</span>
         </p>
 
         <form onSubmit={handleSubmit} className="w-full mt-2">
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">KU Student ID</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">รหัสนิสิต KU</label>
             <input
               name="ku_id"
               type="text"
-              placeholder="KU Student ID"
+              placeholder="รหัสนิสิต KU"
               value={form.ku_id}
               onChange={(e) => setForm((prev) => ({ ...prev, ku_id: e.target.value }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1a7f42]"
@@ -96,8 +96,8 @@ const SSOProfileSetup = () => {
             selectedDepartment={form.department}
             onFacultyChange={(faculty) => setForm((prev) => ({ ...prev, faculty }))}
             onDepartmentChange={(department) => setForm((prev) => ({ ...prev, department }))}
-            facultyError={error && !form.faculty ? 'Faculty is required' : ''}
-            departmentError={error && !form.department ? 'Department is required' : ''}
+            facultyError={error && !form.faculty ? 'กรุณาเลือกคณะ' : ''}
+            departmentError={error && !form.department ? 'กรุณาเลือกภาควิชา' : ''}
           />
 
           {error && <div className="text-red-500 text-sm mb-2">{error}</div>}
@@ -107,7 +107,7 @@ const SSOProfileSetup = () => {
             className="w-full bg-gradient-to-r from-[#1a7f42] to-[#2d9e5a] text-white py-3 rounded-lg font-bold mt-4 hover:from-[#166a37] hover:to-[#25824a] transition-all duration-300 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={submitting}
           >
-            {submitting ? 'Saving...' : 'Complete Setup'}
+            {submitting ? 'กำลังบันทึก...' : 'บันทึกข้อมูล'}
           </button>
         </form>
       </div>

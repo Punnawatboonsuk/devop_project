@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, FileText, CheckSquare, Users, BarChart, LogOut, Settings } from 'lucide-react';
+import { Home, FileText, CheckSquare, Users, BarChart, LogOut, Settings, UserPlus } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom'; // เพิ่ม useNavigate
 import { useAuth } from '../hooks/useAuth'; // ✅ 1. Import AuthContext
 
@@ -17,29 +17,32 @@ const Sidebar = ({ role = 'STUDENT' }) => {
   // กำหนดเมนูตาม Role
   const menus = {
     STUDENT: [
-      { name: 'Dashboard', icon: Home, path: '/student/dashboard' },
-      { name: 'My Applications', icon: FileText, path: '/student/applications' },
-      { name: 'Tracking', icon: BarChart, path: '/student/tracking' },
-      { name: 'History', icon: CheckSquare, path: '/student/history' },
+      { name: 'แดชบอร์ด', icon: Home, path: '/student/dashboard' },
+      { name: 'สร้างใบสมัครใหม่', icon: FileText, path: '/student/create' },
+      { name: 'ติดตามผล', icon: BarChart, path: '/student/tracking' },
+      { name: 'ประวัติ', icon: CheckSquare, path: '/student/history' },
     ],
     STAFF: [ // รวม Staff, SubDean, Dean
-      { name: 'Dashboard', icon: Home, path: '/staff/dashboard' },
-      { name: 'Pending Reviews', icon: FileText, path: '/staff/reviews' },
-      { name: 'History', icon: CheckSquare, path: '/staff/history' },
+      { name: 'แดชบอร์ด', icon: Home, path: '/staff/dashboard' },
+      { name: 'คิวรอตรวจสอบ', icon: FileText, path: '/staff/reviews' },
+      { name: 'ประวัติ', icon: CheckSquare, path: '/staff/history' },
     ],
     ADMIN: [
-      { name: 'Dashboard', icon: Home, path: '/admin/verification' },
-      { name: 'Verification', icon: CheckSquare, path: '/admin/verification' },
-      { name: 'Voting Control', icon: Users, path: '/admin/voting' },
-      { name: 'Reports', icon: FileText, path: '/admin/reports' },
+      { name: 'แดชบอร์ด', icon: Home, path: '/admin/dashboard' },
+      { name: 'ตรวจสอบสิทธิ์', icon: CheckSquare, path: '/admin/verification' },
+      { name: 'ติดตาม Ticket', icon: FileText, path: '/admin/tickets' },
+      { name: 'ควบคุมการลงคะแนน', icon: Users, path: '/admin/voting' },
+      { name: 'สร้างบัญชี', icon: UserPlus, path: '/admin/accounts' },
     ],
     COMMITTEE: [
-      { name: 'Dashboard', icon: Home, path: '/committee/dashboard' },
-      { name: 'Proclamation', icon: FileText, path: '/committee/proclamation' },
-      { name: 'Candidates', icon: Users, path: '/committee/candidates' },
+      { name: 'แดชบอร์ด', icon: Home, path: '/committee/dashboard' },
+      { name: 'ประกาศผล', icon: FileText, path: '/committee/proclamation' },
+      { name: 'ผู้เข้าชิง', icon: Users, path: '/committee/candidates' },
     ],
     PRESIDENT: [
-       { name: 'Proclamation', icon: FileText, path: '/president/proclaim' }
+      { name: 'แดชบอร์ด', icon: Home, path: '/committee/dashboard' },
+      { name: 'ประกาศผล', icon: FileText, path: '/committee/proclamation' },
+      { name: 'ผู้เข้าชิง', icon: Users, path: '/committee/candidates' },
     ]
   };
 
@@ -49,8 +52,8 @@ const Sidebar = ({ role = 'STUDENT' }) => {
     <aside className="h-screen w-64 bg-ku-main text-white flex flex-col fixed left-0 top-0 z-50 shadow-xl">
       {/* Logo Area */}
       <div className="p-6 border-b border-white/10">
-        <h1 className="text-2xl font-bold tracking-tight">Nisit Deeden</h1>
-        <p className="text-xs text-green-200 mt-1">Kasetsart University</p>
+        <h1 className="text-2xl font-bold tracking-tight">นิสิตดีเด่น</h1>
+        <p className="text-xs text-green-200 mt-1">มหาวิทยาลัยเกษตรศาสตร์</p>
       </div>
 
       {/* Menu Links */}
@@ -77,7 +80,7 @@ const Sidebar = ({ role = 'STUDENT' }) => {
       <div className="p-4 border-t border-white/10 space-y-2">
         <button className="flex items-center gap-3 px-4 py-2 w-full text-left rounded-lg hover:bg-white/5 text-sm text-green-200 transition-colors">
             <Settings size={18} />
-            <span>Settings</span>
+            <span>ตั้งค่า</span>
         </button>
         
         {/* ✅ 3. ผูกปุ่ม Logout กับฟังก์ชัน */}
@@ -86,7 +89,7 @@ const Sidebar = ({ role = 'STUDENT' }) => {
           className="flex items-center gap-3 px-4 py-2 w-full text-left rounded-lg hover:bg-red-500/20 text-red-200 hover:text-red-100 transition-colors text-sm"
         >
           <LogOut size={18} />
-          <span>Log Out</span>
+          <span>ออกจากระบบ</span>
         </button>
       </div>
     </aside>
@@ -94,3 +97,5 @@ const Sidebar = ({ role = 'STUDENT' }) => {
 };
 
 export default Sidebar;
+
+

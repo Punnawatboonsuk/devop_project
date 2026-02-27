@@ -2,9 +2,9 @@ const multer = require('multer');
 const { pool } = require('../config/database');
 const { ERROR_MESSAGES } = require('./constants');
 
-const REQUIRED_FILE_CATEGORIES = ['transcript', 'portfolio', 'profile_photo'];
+const REQUIRED_FILE_CATEGORIES = ['transcript', 'profile_photo'];
 const OPTIONAL_FILE_CATEGORIES = ['certificates', 'recommendation_letter'];
-const ALLOWED_FILE_CATEGORIES = [...REQUIRED_FILE_CATEGORIES, ...OPTIONAL_FILE_CATEGORIES];
+const ALLOWED_FILE_CATEGORIES = [...REQUIRED_FILE_CATEGORIES, 'portfolio', 'activity_hours_proof', ...OPTIONAL_FILE_CATEGORIES];
 
 const upload = multer({
   dest: 'uploads/',
@@ -136,6 +136,7 @@ function getFileCategoriesFromRequest(req) {
   // Handle single files
   if (req.files.transcript) filesByCategory.transcript = req.files.transcript;
   if (req.files.portfolio) filesByCategory.portfolio = req.files.portfolio;
+  if (req.files.activity_hours_proof) filesByCategory.activity_hours_proof = req.files.activity_hours_proof;
   if (req.files.profile_photo) filesByCategory.profile_photo = req.files.profile_photo;
   if (req.files.recommendation_letter) filesByCategory.recommendation_letter = req.files.recommendation_letter;
   

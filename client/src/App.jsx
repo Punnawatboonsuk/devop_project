@@ -25,12 +25,16 @@ import TicketDetail from './pages/student/TicketDetail';
 
 // --- Pages: Staff/Executive ---
 import StaffDashboard from './pages/staff/StaffDashboard';
+import StaffReviews from './pages/staff/StaffReviews';
 import ReviewTicket from './pages/staff/ReviewTicket';
 import StaffHistory from './pages/staff/History'; // ✅ เพิ่มบรรทัดนี้ครับ
 
 // --- Pages: Admin ---
 import Verification from './pages/admin/Verification';
 import VotingControl from './pages/admin/VotingControl';
+import AccountCreation from './pages/admin/AccountCreation';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import TicketTracker from './pages/admin/TicketTracker';
 
 // --- Pages: Committee ---
 import VotingBallot from './pages/committee/VotingBallot';
@@ -66,6 +70,7 @@ function App() {
             </ProtectedRoute>
           }>
             <Route path="dashboard" element={<StudentDashboard />} />
+            <Route path="applications" element={<Navigate to="/student/create" replace />} />
             <Route path="create" element={<CreateTicket />} />
             <Route path="tracking" element={<StudentTracking />} />
             <Route path="edit/:id" element={<EditTicket />} />
@@ -81,7 +86,7 @@ function App() {
             </ProtectedRoute>
           }>
             <Route path="dashboard" element={<StaffDashboard />} />
-            <Route path="reviews" element={<StaffDashboard />} />
+            <Route path="reviews" element={<StaffReviews />} />
             <Route path="review/:id" element={<ReviewTicket />} />
             <Route path="history" element={<StaffHistory />} />
             <Route index element={<Navigate to="dashboard" replace />} />
@@ -93,14 +98,17 @@ function App() {
               <Layout role="ADMIN" />
             </ProtectedRoute>
           }>
+            <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="verification" element={<Verification />} />
+            <Route path="tickets" element={<TicketTracker />} />
             <Route path="voting" element={<VotingControl />} />
-            <Route index element={<Navigate to="verification" replace />} />
+            <Route path="accounts" element={<AccountCreation />} />
+            <Route index element={<Navigate to="dashboard" replace />} />
           </Route>
 
           {/* ================= COMMITTEE ROUTES ================= */}
           <Route path="/committee" element={
-            <ProtectedRoute allowedRoles={['COMMITTEE']}>
+            <ProtectedRoute allowedRoles={['COMMITTEE', 'COMMITTEE_PRESIDENT']}>
               <Layout role="COMMITTEE" />
             </ProtectedRoute>
           }>
@@ -119,7 +127,8 @@ function App() {
               <Layout role="COMMITTEE" />
             </ProtectedRoute>
           }>
-            <Route path="proclaim" element={<Proclamation />} />
+            <Route path="proclaim" element={<Navigate to="/committee/proclamation" replace />} />
+            <Route index element={<Navigate to="/committee/dashboard" replace />} />
           </Route>
 
           {/* Default Redirect: ถ้าเข้า Path มั่ว ให้ไป Login */}

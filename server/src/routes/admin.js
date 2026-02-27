@@ -1,6 +1,16 @@
 const express = require('express');
 const { pool, transaction } = require('../config/database');
 const { ROLES, PHASES, TICKET_STATUS, LOG_ACTIONS } = require('../utils/constants');
+const { hashpw, gensalt } = require('../utils/ripcrypt');
+const {
+  getRoundById,
+  getRoundByAcademic,
+  getOrCreateRound,
+  getCurrentPhaseForRound,
+  getActiveRound,
+  ensureInitialNominationPhase,
+  advancePhase
+} = require('../services/roundPhase');
 const router = express.Router();
 
 /* ==================== Helper Functions ==================== */
@@ -21,6 +31,97 @@ async function createAuditLog(client, userId, action, data = {}) {
      VALUES ($1, $2, $3, $4, $5)`,
     [userId, action, data.resourceType, data.resourceId, JSON.stringify(data.newValues)]
   );
+}
+
+async function resolveRound(client, input = {}, { createIfMissing = false } = {}) {
+  const roundId = Number.parseInt(input.round_id, 10);
+  if (!Number.isNaN(roundId) && roundId > 0) {
+    return getRoundById(client, roundId);
+  }
+
+  const hasYearInput = input.academic_year !== undefined && input.academic_year !== null && String(input.academic_year).trim() !== '';
+  const hasSemesterInput = input.semester !== undefined && input.semester !== null && String(input.semester).trim() !== '';
+  const year = Number.parseInt(input.academic_year, 10);
+  const semester = Number.parseInt(input.semester, 10);
+  if (hasYearInput || hasSemesterInput) {
+    if (Number.isNaN(year) || year < 2000 || year > 3000) {
+      throw new Error('academic_year must be between 2000 and 3000.');
+    }
+    if (![1, 2].includes(semester)) {
+      throw new Error('semester must be 1 or 2.');
+    }
+    if (createIfMissing) {
+      return getOrCreateRound(client, year, semester);
+    }
+    return getRoundByAcademic(client, year, semester);
+  }
+
+  return getActiveRound(client);
+}
+
+function validateKuEmail(email = '') {
+  const kuPattern = /^[a-zA-Z0-9._%+-]+@(ku\.th|live\.ku\.th)$/;
+  return kuPattern.test(email);
+}
+
+function normalizeRoleInput(role = '') {
+  const value = String(role).trim().toUpperCase().replace(/\s+/g, '_');
+  const accepted = new Set([
+    ROLES.STUDENT,
+    ROLES.STAFF,
+    ROLES.SUB_DEAN,
+    ROLES.DEAN,
+    ROLES.COMMITTEE,
+    ROLES.COMMITTEE_PRESIDENT
+  ]);
+  return accepted.has(value) ? value : null;
+}
+
+function normalizeManagedRoleInput(role = '') {
+  const value = String(role).trim().toUpperCase().replace(/\s+/g, '_');
+  const accepted = new Set([
+    ROLES.STUDENT,
+    ROLES.STAFF,
+    ROLES.SUB_DEAN,
+    ROLES.DEAN,
+    ROLES.COMMITTEE,
+    ROLES.COMMITTEE_PRESIDENT,
+    ROLES.ADMIN
+  ]);
+  return accepted.has(value) ? value : null;
+}
+
+function getPrimaryRole(roles = []) {
+  const roleHierarchy = [
+    ROLES.ADMIN,
+    ROLES.COMMITTEE_PRESIDENT,
+    ROLES.DEAN,
+    ROLES.SUB_DEAN,
+    ROLES.COMMITTEE,
+    ROLES.STAFF,
+    ROLES.STUDENT
+  ];
+
+  for (const role of roleHierarchy) {
+    if (roles.includes(role)) return role;
+  }
+  return ROLES.STUDENT;
+}
+
+function requiresFaculty(role) {
+  return [ROLES.STUDENT, ROLES.STAFF, ROLES.SUB_DEAN, ROLES.DEAN].includes(role);
+}
+
+function requiresDepartment(role) {
+  return [ROLES.STUDENT, ROLES.STAFF].includes(role);
+}
+
+function requiresKuId(role) {
+  return role === ROLES.STUDENT;
+}
+
+function mustClearKuId(role) {
+  return !requiresKuId(role);
 }
 
 /* ==================== Middleware ==================== */
@@ -67,48 +168,375 @@ router.get('/dashboard', (req, res) => {
 });
 
 /**
+ * GET /api/admin/users - List all users for account control
+ */
+router.get('/users', requireAdminAuth, async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `SELECT
+           u.id,
+           u.email,
+           u.fullname,
+           u.ku_id,
+           u.faculty,
+           u.department,
+           u.google_profile_picture,
+           u.created_at,
+           COALESCE(ARRAY_REMOVE(ARRAY_AGG(r.name ORDER BY r.name), NULL), '{}') AS roles
+         FROM users u
+         LEFT JOIN user_roles ur ON ur.user_id = u.id
+         LEFT JOIN roles r ON r.id = ur.role_id
+         GROUP BY u.id
+         ORDER BY u.created_at DESC`
+      );
+
+      const users = result.rows.map((row) => {
+        const roles = Array.isArray(row.roles) ? row.roles.filter(Boolean) : [];
+        const primaryRole = getPrimaryRole(roles);
+        return {
+          id: row.id,
+          email: row.email,
+          fullname: row.fullname,
+          ku_id: row.ku_id,
+          faculty: row.faculty,
+          department: row.department,
+          profile_picture: row.google_profile_picture || null,
+          roles,
+          primary_role: primaryRole,
+          created_at: row.created_at
+        };
+      });
+
+      return res.status(200).json({
+        users,
+        total: users.length
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('List users error:', error);
+    return res.status(500).json({ message: 'Error fetching users.' });
+  }
+});
+
+/**
+ * POST /api/admin/users - Create managed user account
+ */
+router.post('/users', requireAdminAuth, async (req, res) => {
+  const {
+    email = '',
+    password = '',
+    fullname = '',
+    ku_id = '',
+    role = '',
+    faculty = '',
+    department = ''
+  } = req.body || {};
+
+  const emailNorm = String(email).trim().toLowerCase();
+  const roleName = normalizeRoleInput(role);
+  const fullNameValue = String(fullname).trim();
+  const kuIdValue = String(ku_id).trim();
+  const facultyValue = String(faculty).trim();
+  const departmentValue = String(department).trim();
+
+  if (!emailNorm || !password || !fullNameValue || !roleName) {
+    return res.status(400).json({
+      message: 'Email, password, full name, and role are required.'
+    });
+  }
+
+  if (!validateKuEmail(emailNorm)) {
+    return res.status(400).json({
+      message: 'Please use a valid KU email (@ku.th or @live.ku.th).'
+    });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({
+      message: 'Password must be at least 8 characters.'
+    });
+  }
+
+  if (requiresFaculty(roleName) && !facultyValue) {
+    return res.status(400).json({
+      message: 'Faculty is required for student, staff, sub-dean, and dean accounts.'
+    });
+  }
+
+  if (requiresDepartment(roleName) && !departmentValue) {
+    return res.status(400).json({
+      message: 'Department is required for student and staff accounts.'
+    });
+  }
+
+  if (requiresKuId(roleName) && !kuIdValue) {
+    return res.status(400).json({
+      message: 'KU ID is required for student accounts.'
+    });
+  }
+
+  try {
+    const created = await transaction(async (client) => {
+      const existing = await client.query(
+        'SELECT id FROM users WHERE email = $1',
+        [emailNorm]
+      );
+      if (existing.rows.length > 0) {
+        throw new Error('Email already registered');
+      }
+
+      const roleResult = await client.query(
+        'SELECT id FROM roles WHERE name = $1',
+        [roleName]
+      );
+      if (roleResult.rows.length === 0) {
+        throw new Error(`Role not found: ${roleName}`);
+      }
+
+      const passwordHash = hashpw(password, gensalt());
+      const userInsert = await client.query(
+        `INSERT INTO users (ku_id, email, fullname, faculty, department, password_hash, sso_enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, false)
+         RETURNING id, ku_id, email, fullname, faculty, department, created_at`,
+        [
+          mustClearKuId(roleName) ? null : (kuIdValue || null),
+          emailNorm,
+          fullNameValue,
+          requiresFaculty(roleName) ? facultyValue : null,
+          requiresDepartment(roleName) ? departmentValue : null,
+          passwordHash
+        ]
+      );
+
+      const user = userInsert.rows[0];
+      await client.query(
+        `INSERT INTO user_roles (user_id, role_id, assigned_by)
+         VALUES ($1, $2, $3)`,
+        [user.id, roleResult.rows[0].id, req.session.user_id]
+      );
+
+      await createAuditLog(client, req.session.user_id, LOG_ACTIONS.ADMIN_ACTION, {
+        resourceType: 'user',
+        resourceId: user.id,
+        newValues: {
+          action: 'create_privileged_user',
+          role: roleName,
+          email: user.email,
+          faculty: user.faculty,
+          department: user.department
+        }
+      });
+
+      return { ...user, role: roleName };
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Account created successfully.',
+      user: created
+    });
+  } catch (error) {
+    console.error('Create admin user error:', error);
+    return res.status(400).json({
+      message: error.message || 'Error creating account.'
+    });
+  }
+});
+
+/**
+ * PATCH /api/admin/users/:id - Update user profile/role
+ */
+router.patch('/users/:id', requireAdminAuth, async (req, res) => {
+  const userId = Number.parseInt(req.params.id, 10);
+  if (Number.isNaN(userId) || userId <= 0) {
+    return res.status(400).json({ message: 'Invalid user id.' });
+  }
+
+  const {
+    fullname = '',
+    ku_id = '',
+    role = '',
+    faculty = '',
+    department = ''
+  } = req.body || {};
+
+  const roleName = normalizeManagedRoleInput(role);
+  const fullNameValue = String(fullname).trim();
+  const kuIdValue = String(ku_id).trim();
+  const facultyValue = String(faculty).trim();
+  const departmentValue = String(department).trim();
+
+  if (!fullNameValue || !roleName) {
+    return res.status(400).json({ message: 'Full name and role are required.' });
+  }
+
+  if (requiresFaculty(roleName) && !facultyValue) {
+    return res.status(400).json({
+      message: 'Faculty is required for student, staff, sub-dean, and dean.'
+    });
+  }
+
+  if (requiresDepartment(roleName) && !departmentValue) {
+    return res.status(400).json({
+      message: 'Department is required for student and staff.'
+    });
+  }
+
+  if (requiresKuId(roleName) && !kuIdValue) {
+    return res.status(400).json({
+      message: 'KU ID is required for student.'
+    });
+  }
+
+  try {
+    const updated = await transaction(async (client) => {
+      const existingUser = await client.query(
+        'SELECT id, email FROM users WHERE id = $1',
+        [userId]
+      );
+      if (existingUser.rows.length === 0) {
+        throw new Error('User not found');
+      }
+
+      const roleResult = await client.query(
+        'SELECT id FROM roles WHERE name = $1',
+        [roleName]
+      );
+      if (roleResult.rows.length === 0) {
+        throw new Error(`Role not found: ${roleName}`);
+      }
+
+      await client.query(
+        `UPDATE users
+         SET fullname = $1,
+             ku_id = $2,
+             faculty = $3,
+             department = $4,
+             updated_at = NOW()
+         WHERE id = $5`,
+        [
+          fullNameValue,
+          mustClearKuId(roleName) ? null : (kuIdValue || null),
+          requiresFaculty(roleName) ? facultyValue : null,
+          requiresDepartment(roleName) ? departmentValue : null,
+          userId
+        ]
+      );
+
+      await client.query('DELETE FROM user_roles WHERE user_id = $1', [userId]);
+      await client.query(
+        `INSERT INTO user_roles (user_id, role_id, assigned_by)
+         VALUES ($1, $2, $3)`,
+        [userId, roleResult.rows[0].id, req.session.user_id]
+      );
+
+      const rowResult = await client.query(
+        `SELECT
+           u.id,
+           u.email,
+           u.fullname,
+           u.ku_id,
+           u.faculty,
+           u.department,
+           u.google_profile_picture,
+           u.created_at,
+           COALESCE(ARRAY_REMOVE(ARRAY_AGG(r.name ORDER BY r.name), NULL), '{}') AS roles
+         FROM users u
+         LEFT JOIN user_roles ur ON ur.user_id = u.id
+         LEFT JOIN roles r ON r.id = ur.role_id
+         WHERE u.id = $1
+         GROUP BY u.id`,
+        [userId]
+      );
+      const row = rowResult.rows[0];
+      const roles = Array.isArray(row.roles) ? row.roles.filter(Boolean) : [];
+      const primaryRole = getPrimaryRole(roles);
+
+      await createAuditLog(client, req.session.user_id, LOG_ACTIONS.ADMIN_ACTION, {
+        resourceType: 'user',
+        resourceId: userId,
+        newValues: {
+          action: 'update_user_profile',
+          role: primaryRole,
+          fullname: row.fullname
+        }
+      });
+
+      return {
+        id: row.id,
+        email: row.email,
+        fullname: row.fullname,
+        ku_id: row.ku_id,
+        faculty: row.faculty,
+        department: row.department,
+        profile_picture: row.google_profile_picture || null,
+        roles,
+        primary_role: primaryRole,
+        created_at: row.created_at
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'User updated successfully.',
+      user: updated
+    });
+  } catch (error) {
+    console.error('Update user error:', error);
+    return res.status(400).json({ message: error.message || 'Error updating user.' });
+  }
+});
+
+/**
  * POST /api/admin/phase/end-nomination - End nomination phase
  * Moves system from NOMINATION to REVIEW_END phase
  */
 router.post('/phase/end-nomination', requireAdminAuth, async (req, res) => {
   try {
     const result = await transaction(async (client) => {
-      // Check current phase
-      const currentPhaseResult = await client.query(
-        'SELECT phase FROM system_phase WHERE id = 1',
-        []
-      );
-
-      if (currentPhaseResult.rows.length === 0) {
-        throw new Error('System phase not initialized');
+      const round = await resolveRound(client, req.body, { createIfMissing: true });
+      if (!round) {
+        throw new Error('Round not found');
       }
 
-      const currentPhase = currentPhaseResult.rows[0].phase;
+      const currentPhaseInfo = await ensureInitialNominationPhase(client, round.id, req.session.user_id);
+      const currentPhase = currentPhaseInfo.phase;
 
       if (currentPhase !== PHASES.NOMINATION) {
         throw new Error(`Cannot end nomination. Current phase is ${currentPhase}`);
       }
 
-      // Update to REVIEW_END phase
-      await client.query(
-        'UPDATE system_phase SET phase = $1, updated_at = NOW() WHERE id = 1',
-        [PHASES.REVIEW_END]
-      );
+      const next = await advancePhase(client, round.id, PHASES.REVIEW_END, req.session.user_id, 'Nomination phase ended');
 
       // Create audit log
       await createAuditLog(client, req.session.user_id, LOG_ACTIONS.PHASE_CHANGE, {
-        resourceType: 'system_phase',
-        resourceId: 1,
-        newValues: { old_phase: PHASES.NOMINATION, new_phase: PHASES.REVIEW_END }
+        resourceType: 'round_phase_history',
+        resourceId: round.id,
+        newValues: {
+          round_id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          old_phase: PHASES.NOMINATION,
+          new_phase: next.phase
+        }
       });
 
-      return { success: true, new_phase: PHASES.REVIEW_END };
+      return { success: true, round, new_phase: next.phase };
     });
 
     return res.status(200).json({
       message: 'Nomination phase ended successfully',
       success: true,
-      new_phase: result.new_phase
+      new_phase: result.new_phase,
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester
+      }
     });
 
   } catch (error) {
@@ -122,68 +550,44 @@ router.post('/phase/end-nomination', requireAdminAuth, async (req, res) => {
  * Moves specific award type from REVIEW_END to VOTING phase
  */
 router.post('/phase/start-vote', requireAdminAuth, async (req, res) => {
-  const { award_type } = req.body;
-
-  if (!award_type) {
-    return res.status(400).json({ message: 'Award type is required' });
-  }
-
   try {
     const result = await transaction(async (client) => {
-      // Check if voting phase already exists for this award type
-      const existingPhase = await client.query(
-        'SELECT id, status FROM voting_phase WHERE award_type = $1',
-        [award_type]
-      );
-
-      if (existingPhase.rows.length > 0) {
-        const currentStatus = existingPhase.rows[0].status;
-        if (currentStatus === 'voting') {
-          throw new Error(`Voting is already open for ${award_type}`);
-        } else if (currentStatus === 'closed') {
-          throw new Error(`Voting for ${award_type} has already been closed`);
-        }
+      const round = await resolveRound(client, req.body);
+      if (!round) {
+        throw new Error('Round not found');
       }
 
-      // Check current system phase
-      const systemPhaseResult = await client.query(
-        'SELECT phase FROM system_phase WHERE id = 1',
-        []
-      );
-
-      const currentSystemPhase = systemPhaseResult.rows[0]?.phase;
-
-      if (currentSystemPhase !== PHASES.REVIEW_END) {
-        throw new Error(`Cannot start voting. System is in ${currentSystemPhase} phase`);
+      const currentPhase = await getCurrentPhaseForRound(client, round.id);
+      if (!currentPhase || currentPhase.phase !== PHASES.REVIEW_END) {
+        throw new Error(`Cannot start voting. Current phase is ${currentPhase?.phase || 'NONE'}`);
       }
 
-      // Create or update voting phase
-      if (existingPhase.rows.length > 0) {
-        await client.query(
-          'UPDATE voting_phase SET status = $1, start_at = NOW(), end_at = NULL WHERE award_type = $2',
-          ['voting', award_type]
-        );
-      } else {
-        await client.query(
-          'INSERT INTO voting_phase (award_type, status, start_at) VALUES ($1, $2, NOW())',
-          [award_type, 'voting']
-        );
-      }
+      const next = await advancePhase(client, round.id, PHASES.VOTING, req.session.user_id, 'Voting phase started');
 
-      // Create audit log
       await createAuditLog(client, req.session.user_id, LOG_ACTIONS.PHASE_CHANGE, {
-        resourceType: 'voting_phase',
-        resourceId: award_type,
-        newValues: { award_type, status: 'voting', action: 'start_vote' }
+        resourceType: 'round_phase_history',
+        resourceId: round.id,
+        newValues: {
+          round_id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          old_phase: PHASES.REVIEW_END,
+          new_phase: next.phase
+        }
       });
 
-      return { success: true, award_type };
+      return { success: true, round, new_phase: next.phase };
     });
 
     return res.status(200).json({
-      message: `Voting started for ${award_type}`,
+      message: 'Voting started',
       success: true,
-      award_type: result.award_type
+      new_phase: result.new_phase,
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester
+      }
     });
 
   } catch (error) {
@@ -197,139 +601,43 @@ router.post('/phase/start-vote', requireAdminAuth, async (req, res) => {
  * Moves specific award type from VOTING to VOTING_END phase and calculates results
  */
 router.post('/phase/end-vote', requireAdminAuth, async (req, res) => {
-  const { award_type } = req.body;
-
-  if (!award_type) {
-    return res.status(400).json({ message: 'Award type is required' });
-  }
-
   try {
     const result = await transaction(async (client) => {
-      // Check if voting phase exists and is open
-      const votingPhaseResult = await client.query(
-        'SELECT id, status FROM voting_phase WHERE award_type = $1',
-        [award_type]
-      );
-
-      if (votingPhaseResult.rows.length === 0) {
-        throw new Error(`No voting phase found for ${award_type}`);
+      const round = await resolveRound(client, req.body);
+      if (!round) {
+        throw new Error('Round not found');
       }
 
-      const phase = votingPhaseResult.rows[0];
-
-      if (phase.status !== 'voting') {
-        throw new Error(`Voting is not open for ${award_type}. Current status: ${phase.status}`);
+      const currentPhase = await getCurrentPhaseForRound(client, round.id);
+      if (!currentPhase || currentPhase.phase !== PHASES.VOTING) {
+        throw new Error(`Cannot end voting. Current phase is ${currentPhase?.phase || 'NONE'}`);
       }
 
-      // Get total committee count for threshold calculation
-      const committeeCountResult = await client.query(
-        `SELECT COUNT(DISTINCT ur.user_id) as total_committee
-         FROM user_roles ur
-         JOIN roles r ON ur.role_id = r.id
-         WHERE r.name IN ($1, $2)`,
-        [ROLES.COMMITTEE, ROLES.COMMITTEE_PRESIDENT]
-      );
+      const next = await advancePhase(client, round.id, PHASES.VOTING_END, req.session.user_id, 'Voting phase ended');
 
-      const totalCommittee = committeeCountResult.rows[0]?.total_committee || 0;
-      const threshold = Math.floor(totalCommittee / 2) + 1;
-
-      // Get all tickets for this award type that are in approved status
-      const ticketsResult = await client.query(
-        `SELECT t.id, t.ku_id, t.fullname, t.faculty, t.department,
-                COUNT(v.id) as vote_count,
-                COUNT(CASE WHEN v.vote_result = $1 THEN 1 END) as approve_count
-         FROM tickets t
-         LEFT JOIN vote v ON t.id = v.ticket_id
-         WHERE t.award_type = $2 AND t.status = $3
-         GROUP BY t.id`,
-        ['approved', award_type, TICKET_STATUS.APPROVED]
-      );
-
-      const winners = [];
-      const losers = [];
-
-      // Process each ticket and determine winners/losers
-      for (const ticket of ticketsResult.rows) {
-        const approveCount = parseInt(ticket.approve_count);
-        const voteCount = parseInt(ticket.vote_count);
-
-        if (approveCount >= threshold) {
-          // Winner - update ticket status to approved
-          await client.query(
-            'UPDATE tickets SET status = $1 WHERE id = $2',
-            [TICKET_STATUS.APPROVED, ticket.id]
-          );
-
-          winners.push({
-            id: ticket.id,
-            ku_id: ticket.ku_id,
-            fullname: ticket.fullname,
-            faculty: ticket.faculty,
-            department: ticket.department,
-            approve_count: approveCount,
-            total_votes: voteCount,
-            threshold_met: true
-          });
-        } else {
-          // Loser - update ticket status to not_approved
-          await client.query(
-            'UPDATE tickets SET status = $1 WHERE id = $2',
-            [TICKET_STATUS.NOT_APPROVED, ticket.id]
-          );
-
-          losers.push({
-            id: ticket.id,
-            ku_id: ticket.ku_id,
-            fullname: ticket.fullname,
-            faculty: ticket.faculty,
-            department: ticket.department,
-            approve_count: approveCount,
-            total_votes: voteCount,
-            threshold_met: false
-          });
-        }
-      }
-
-      // Update voting phase to closed
-      await client.query(
-        'UPDATE voting_phase SET status = $1, end_at = NOW() WHERE id = $2',
-        ['closed', phase.id]
-      );
-
-      // Create audit log
       await createAuditLog(client, req.session.user_id, LOG_ACTIONS.PHASE_CHANGE, {
-        resourceType: 'voting_phase',
-        resourceId: award_type,
-        newValues: { 
-          award_type, 
-          status: 'closed', 
-          action: 'end_vote',
-          winners_count: winners.length,
-          losers_count: losers.length,
-          total_committee: totalCommittee,
-          threshold_required: threshold
+        resourceType: 'round_phase_history',
+        resourceId: round.id,
+        newValues: {
+          round_id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          old_phase: PHASES.VOTING,
+          new_phase: next.phase
         }
       });
 
-      return {
-        success: true,
-        award_type,
-        winners,
-        losers,
-        total_committee,
-        threshold
-      };
+      return { success: true, round, new_phase: next.phase };
     });
 
     return res.status(200).json({
-      message: `Voting ended for ${award_type}`,
+      message: 'Voting ended',
       success: true,
-      results: {
-        award_type: result.award_type,
-        winners: result.winners,
-        losers: result.losers,
-        total_committee: result.total_committee,
-        threshold_required: result.threshold
+      new_phase: result.new_phase,
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester
       }
     });
 
@@ -346,17 +654,20 @@ router.get('/phase/current', requireAdminAuth, async (req, res) => {
   try {
     const client = await pool.connect();
     try {
-      const result = await client.query(
-        'SELECT phase FROM system_phase WHERE id = 1',
-        []
-      );
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ message: 'System phase not initialized' });
+      const round = await resolveRound(client, req.query);
+      if (!round) {
+        return res.status(404).json({ message: 'Round not found' });
       }
 
+      const phaseInfo = await getCurrentPhaseForRound(client, round.id);
       return res.status(200).json({
-        current_phase: result.rows[0].phase
+        current_phase: phaseInfo?.phase || null,
+        round: {
+          id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          name: round.name
+        }
       });
 
     } finally {
@@ -364,6 +675,10 @@ router.get('/phase/current', requireAdminAuth, async (req, res) => {
     }
   } catch (error) {
     console.error('Get current phase error:', error);
+    const message = error.message || 'Error fetching current phase';
+    if (message.includes('academic_year') || message.includes('semester')) {
+      return res.status(400).json({ message });
+    }
     res.status(500).json({ message: 'Error fetching current phase' });
   }
 });

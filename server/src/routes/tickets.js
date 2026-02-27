@@ -7,6 +7,11 @@ const {
   AWARD_TYPES,
   ERROR_MESSAGES
 } = require('../utils/constants');
+const {
+  getRoundById,
+  getOrCreateRound,
+  ensureInitialNominationPhase
+} = require('../services/roundPhase');
 
 const router = express.Router();
 
@@ -31,9 +36,21 @@ const EDITABLE_STUDENT_STATUSES = new Set([
 
 const REVIEW_ACTIONS = new Set(['accept', 'return', 'reject']);
 
-const REQUIRED_FILE_CATEGORIES = ['transcript', 'portfolio', 'profile_photo'];
+const BASE_REQUIRED_FILE_CATEGORIES = ['transcript', 'profile_photo'];
 const OPTIONAL_FILE_CATEGORIES = ['certificates', 'recommendation_letter'];
-const ALLOWED_FILE_CATEGORIES = [...REQUIRED_FILE_CATEGORIES, ...OPTIONAL_FILE_CATEGORIES];
+const ALLOWED_FILE_CATEGORIES = [...BASE_REQUIRED_FILE_CATEGORIES, 'portfolio', 'activity_hours_proof', ...OPTIONAL_FILE_CATEGORIES];
+
+const AWARD_REQUIRED_FIELDS = {
+  [AWARD_TYPES.ACTIVITY_ENRICHMENT]: ['activity_hours'],
+  [AWARD_TYPES.CREATIVITY_INNOVATION]: [],
+  [AWARD_TYPES.GOOD_BEHAVIOR]: []
+};
+
+const AWARD_REQUIRED_FILE_CATEGORIES = {
+  [AWARD_TYPES.ACTIVITY_ENRICHMENT]: [...BASE_REQUIRED_FILE_CATEGORIES, 'portfolio', 'activity_hours_proof'],
+  [AWARD_TYPES.CREATIVITY_INNOVATION]: [...BASE_REQUIRED_FILE_CATEGORIES, 'portfolio'],
+  [AWARD_TYPES.GOOD_BEHAVIOR]: [...BASE_REQUIRED_FILE_CATEGORIES, 'recommendation_letter']
+};
 
 
 function hasRole(userRoles, role) {
@@ -57,13 +74,22 @@ function getCurrentWorkflowStatus(ticket) {
 }
 
 function getCurrentRoundId(ticket) {
-  const roundRaw = ticket?.form_data?.round_id;
-  const parsed = Number.parseInt(roundRaw, 10);
-  return Number.isNaN(parsed) ? 1 : parsed;
+  const parsed = Number.parseInt(ticket?.round_id, 10);
+  if (!Number.isNaN(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  const legacyRoundRaw = ticket?.form_data?.round_id;
+  const legacyParsed = Number.parseInt(legacyRoundRaw, 10);
+  return Number.isNaN(legacyParsed) ? null : legacyParsed;
 }
 
 function mapWorkflowToDbStatus(workflowStatus) {
-  if (workflowStatus === WORKFLOW_STATUS.APPROVED || workflowStatus === WORKFLOW_STATUS.ANNOUNCED) {
+  if (
+    workflowStatus === WORKFLOW_STATUS.REVIEWED_BY_DEAN ||
+    workflowStatus === WORKFLOW_STATUS.APPROVED ||
+    workflowStatus === WORKFLOW_STATUS.ANNOUNCED
+  ) {
     return TICKET_STATUS.APPROVED;
   }
   if (workflowStatus === WORKFLOW_STATUS.REJECTED) {
@@ -82,16 +108,17 @@ function validateAwardType(awardType) {
   return Object.values(AWARD_TYPES).includes(awardType);
 }
 
+function getRequiredFileCategoriesForAward(awardType) {
+  return AWARD_REQUIRED_FILE_CATEGORIES[awardType] || BASE_REQUIRED_FILE_CATEGORIES;
+}
+
 function validateGpa(gpa) {
   const parsed = Number.parseFloat(gpa);
   return !Number.isNaN(parsed) && parsed >= 0 && parsed <= 4;
 }
 
-async function getCurrentPhase(client) {
-  const result = await client.query(
-    'SELECT phase FROM phases WHERE is_active = true LIMIT 1'
-  );
-  return result.rows[0]?.phase || null;
+function validateGender(gender) {
+  return ['male', 'female'].includes(String(gender || '').toLowerCase());
 }
 
 async function createAuditLog(client, userId, action, data = {}) {
@@ -166,7 +193,10 @@ async function ensureSingleTicketPerRound(client, userId, roundId) {
     `SELECT id
      FROM tickets
      WHERE user_id = $1
-       AND COALESCE((form_data->>'round_id')::int, 1) = $2
+       AND COALESCE(
+             round_id,
+             NULLIF(regexp_replace(form_data->>'round_id', '[^0-9]', '', 'g'), '')::int
+           ) = $2
      LIMIT 1`,
     [userId, roundId]
   );
@@ -218,6 +248,30 @@ function getReviewerRole(userRoles) {
   return null;
 }
 
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function canStaffAccessTicketByScope(ticket, req) {
+  const reviewerRole = getReviewerRole(req.userRoles || []);
+  if (!reviewerRole) return false;
+
+  const ticketFaculty = normalizeText(ticket?.faculty || ticket?.owner_faculty);
+  const ticketDepartment = normalizeText(ticket?.department || ticket?.owner_department);
+  const sessionFaculty = normalizeText(req.session?.faculty);
+  const sessionDepartment = normalizeText(req.session?.department);
+
+  if (reviewerRole === ROLES.STAFF) {
+    return Boolean(sessionDepartment) && ticketDepartment === sessionDepartment;
+  }
+
+  if ([ROLES.SUB_DEAN, ROLES.DEAN].includes(reviewerRole)) {
+    return Boolean(sessionFaculty) && ticketFaculty === sessionFaculty;
+  }
+
+  return false;
+}
+
 function hydrateTicketResponse(ticket) {
   const workflow_status = getCurrentWorkflowStatus(ticket);
   const round_id = getCurrentRoundId(ticket);
@@ -230,7 +284,9 @@ function hydrateTicketResponse(ticket) {
     ticket_uuid: formData.ticket_uuid || null,
     student_id: ticket.user_id,
     student_code: formData.student_code || ticket.owner_ku_id || null,
-    full_name: formData.full_name || ticket.owner_fullname || null,
+    full_name: formData.full_name || formData.full_name_thai || ticket.owner_fullname || null,
+    full_name_thai: formData.full_name_thai || formData.full_name || ticket.owner_fullname || null,
+    gender: formData.gender || null,
     faculty: formData.faculty || ticket.owner_faculty || null,
     department: formData.department || ticket.owner_department || null,
     award_type: ticket.award_type,
@@ -238,6 +294,7 @@ function hydrateTicketResponse(ticket) {
     gpa: formData.gpa || null,
     portfolio_description: formData.portfolio_description || null,
     achievements: formData.achievements || null,
+    activity_hours: formData.activity_hours || null,
     semester: ticket.semester,
     status: workflow_status,
     db_status: ticket.status,
@@ -245,6 +302,8 @@ function hydrateTicketResponse(ticket) {
     reason_for_return: formData.reason_for_return || null,
     submitted_at: formData.submitted_at || ticket.submitted_at,
     reviewed_at: ticket.reviewed_at,
+    reviewed_by: ticket.reviewed_by || null,
+    status_log: Array.isArray(formData.status_log) ? formData.status_log : [],
     created_at: ticket.created_at,
     updated_at: ticket.updated_at
   };
@@ -261,7 +320,7 @@ function validateTicketInput(input, { requireAll = false } = {}) {
 
   if (requireAll || input.academic_year !== undefined) {
     const parsed = Number.parseInt(input.academic_year, 10);
-    if (Number.isNaN(parsed) || parsed < 2500 || parsed > 3000) {
+    if (Number.isNaN(parsed) || parsed < 2000 || parsed > 3000) {
       errors.push('Invalid academic_year.');
     }
   }
@@ -281,6 +340,37 @@ function validateTicketInput(input, { requireAll = false } = {}) {
   if (requireAll || input.achievements !== undefined) {
     if (!input.achievements || String(input.achievements).trim().length === 0) {
       errors.push('achievements is required.');
+    }
+  }
+
+  if (requireAll || input.full_name_thai !== undefined) {
+    if (!input.full_name_thai || String(input.full_name_thai).trim().length === 0) {
+      errors.push('full_name_thai is required.');
+    }
+  }
+
+  if (requireAll || input.gender !== undefined) {
+    if (!validateGender(input.gender)) {
+      errors.push('gender is required and must be male or female.');
+    }
+  }
+
+  if (requireAll || input.faculty !== undefined) {
+    if (!input.faculty || String(input.faculty).trim().length === 0) {
+      errors.push('faculty is required.');
+    }
+  }
+
+  if (requireAll || input.department !== undefined) {
+    if (!input.department || String(input.department).trim().length === 0) {
+      errors.push('department is required.');
+    }
+  }
+
+  const requiredFields = AWARD_REQUIRED_FIELDS[input.award_type] || [];
+  for (const requiredField of requiredFields) {
+    if (!input[requiredField] || String(input[requiredField]).trim().length === 0) {
+      errors.push(`${requiredField} is required for selected award type.`);
     }
   }
 
@@ -321,13 +411,26 @@ router.get('/', [requireAuth, getUserRoles], async (req, res) => {
          JOIN users u ON t.user_id = u.id
          ORDER BY t.created_at DESC`;
     } else if (isStaffOrHigher(req.userRoles)) {
-      query =
-        `SELECT t.*, u.fullname AS owner_fullname, u.email AS owner_email, u.ku_id AS owner_ku_id, u.faculty AS owner_faculty, u.department AS owner_department
-         FROM tickets t
-         JOIN users u ON t.user_id = u.id
-         WHERE u.department = $1
-         ORDER BY t.created_at DESC`;
-      params = [req.session.department];
+      const reviewerRole = getReviewerRole(req.userRoles);
+      if (reviewerRole === ROLES.STAFF) {
+        query =
+          `SELECT t.*, u.fullname AS owner_fullname, u.email AS owner_email, u.ku_id AS owner_ku_id, u.faculty AS owner_faculty, u.department AS owner_department
+           FROM tickets t
+           JOIN users u ON t.user_id = u.id
+           WHERE u.department = $1
+           ORDER BY t.created_at DESC`;
+        params = [req.session.department];
+      } else if ([ROLES.SUB_DEAN, ROLES.DEAN].includes(reviewerRole)) {
+        query =
+          `SELECT t.*, u.fullname AS owner_fullname, u.email AS owner_email, u.ku_id AS owner_ku_id, u.faculty AS owner_faculty, u.department AS owner_department
+           FROM tickets t
+           JOIN users u ON t.user_id = u.id
+           WHERE u.faculty = $1
+           ORDER BY t.created_at DESC`;
+        params = [req.session.faculty];
+      } else {
+        return res.status(403).json({ message: ERROR_MESSAGES.FORBIDDEN });
+      }
     } else if (isCommittee(req.userRoles)) {
       query =
         `SELECT t.*, u.fullname AS owner_fullname, u.email AS owner_email, u.ku_id AS owner_ku_id, u.faculty AS owner_faculty, u.department AS owner_department
@@ -404,7 +507,8 @@ router.get('/:id', [requireAuth, getUserRoles], async (req, res) => {
     }
 
     const isOwner = ticket.user_id === req.session.user_id;
-    const canView = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles) || isCommittee(req.userRoles);
+    const scopedStaffAccess = isStaffOrHigher(req.userRoles) && canStaffAccessTicketByScope(ticket, req);
+    const canView = isOwner || isAdmin(req.userRoles) || scopedStaffAccess || isCommittee(req.userRoles);
 
     if (!canView) {
       return res.status(403).json({ message: ERROR_MESSAGES.FORBIDDEN });
@@ -436,55 +540,85 @@ router.post(
 
     const {
       award_type,
+      full_name_thai,
+      gender,
+      faculty,
+      department,
       academic_year,
       gpa,
       portfolio_description,
       achievements,
+      activity_hours,
       round_id,
       semester = 1
     } = req.body;
 
     const errors = validateTicketInput(
-      { award_type, academic_year, gpa, portfolio_description, achievements },
+      {
+        award_type,
+        full_name_thai,
+        gender,
+        faculty,
+        department,
+        academic_year,
+        gpa,
+        portfolio_description,
+        achievements,
+        activity_hours
+      },
       { requireAll: true }
     );
     if (errors.length > 0) {
       return res.status(400).json({ message: errors.join(' ') });
     }
 
-    const roundId = Number.parseInt(round_id || '1', 10);
-    if (Number.isNaN(roundId) || roundId < 1) {
-      return res.status(400).json({ message: 'Invalid round_id.' });
-    }
-
     const semesterValue = Number.parseInt(semester, 10);
-    if (![1, 2, 3].includes(semesterValue)) {
-      return res.status(400).json({ message: 'semester must be 1, 2, or 3.' });
+    if (![1, 2].includes(semesterValue)) {
+      return res.status(400).json({ message: 'semester must be 1 or 2.' });
     }
 
     try {
       const created = await transaction(async (client) => {
-        const phase = await getCurrentPhase(client);
-        if (phase !== PHASES.NOMINATION) {
+        const academicYearValue = Number.parseInt(academic_year, 10);
+        let round = null;
+
+        if (round_id !== undefined && round_id !== null) {
+          const roundId = Number.parseInt(round_id, 10);
+          if (Number.isNaN(roundId) || roundId < 1) {
+            throw new Error('Invalid round_id.');
+          }
+          round = await getRoundById(client, roundId);
+          if (!round) {
+            throw new Error('Round not found.');
+          }
+        } else {
+          round = await getOrCreateRound(client, academicYearValue, semesterValue);
+        }
+
+        const phaseInfo = await ensureInitialNominationPhase(client, round.id);
+        if (phaseInfo.phase !== PHASES.NOMINATION) {
           throw new Error('Ticket creation is allowed only during NOMINATION phase.');
         }
 
-        const canCreate = await ensureSingleTicketPerRound(client, req.session.user_id, roundId);
+        const canCreate = await ensureSingleTicketPerRound(client, req.session.user_id, round.id);
         if (!canCreate) {
           throw new Error('Student can create only one ticket per round.');
         }
 
         const formData = {
           workflow_status: WORKFLOW_STATUS.DRAFT,
-          round_id: roundId,
+          round_id: round.id,
           student_code: req.session.ku_id || null,
-          full_name: req.session.fullname || null,
-          faculty: req.session.faculty || null,
-          department: req.session.department || null,
-          academic_year: Number.parseInt(academic_year, 10),
+          full_name: String(full_name_thai || req.session.fullname || '').trim() || null,
+          full_name_thai: String(full_name_thai || req.session.fullname || '').trim() || null,
+          gender: String(gender || '').trim().toLowerCase() || null,
+          faculty: String(faculty || req.session.faculty || '').trim() || null,
+          department: String(department || req.session.department || '').trim() || null,
+          academic_year: academicYearValue,
           gpa: Number.parseFloat(gpa),
           portfolio_description: String(portfolio_description),
           achievements: String(achievements),
+          activity_hours: activity_hours !== undefined ? String(activity_hours) : null,
           status_log: [
             {
               action: 'create',
@@ -498,14 +632,15 @@ router.post(
         };
 
         const ticketResult = await client.query(
-          `INSERT INTO tickets (user_id, award_type, academic_year, semester, status, form_data, submitted_at)
-           VALUES ($1, $2, $3, $4, $5, $6, NULL)
+          `INSERT INTO tickets (user_id, award_type, academic_year, semester, round_id, status, form_data, submitted_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NULL)
            RETURNING *`,
           [
             req.session.user_id,
             award_type,
             String(academic_year),
-            semesterValue,
+            round.semester,
+            round.id,
             mapWorkflowToDbStatus(WORKFLOW_STATUS.DRAFT),
             JSON.stringify(formData)
           ]
@@ -521,9 +656,10 @@ router.post(
             workflow_status: WORKFLOW_STATUS.DRAFT,
             actor_id: req.session.user_id,
             actor_role: ROLES.STUDENT,
-            round_id: roundId,
+            round_id: round.id,
             award_type,
-            academic_year: Number.parseInt(academic_year, 10),
+            academic_year: round.academic_year,
+            semester: round.semester,
             gpa: Number.parseFloat(gpa)
           },
           remark: 'Ticket draft created by student.'
@@ -578,6 +714,19 @@ router.patch(
 
         const candidateUpdate = {
           award_type: payload.award_type !== undefined ? payload.award_type : ticket.award_type,
+          full_name_thai:
+            payload.full_name_thai !== undefined
+              ? payload.full_name_thai
+              : (ticket.form_data?.full_name_thai || ticket.form_data?.full_name || req.session.fullname),
+          gender: payload.gender !== undefined ? payload.gender : ticket.form_data?.gender,
+          faculty:
+            payload.faculty !== undefined
+              ? payload.faculty
+              : (ticket.form_data?.faculty || req.session.faculty),
+          department:
+            payload.department !== undefined
+              ? payload.department
+              : (ticket.form_data?.department || req.session.department),
           academic_year:
             payload.academic_year !== undefined
               ? payload.academic_year
@@ -589,6 +738,9 @@ router.patch(
               : ticket.form_data?.portfolio_description,
           achievements:
             payload.achievements !== undefined ? payload.achievements : ticket.form_data?.achievements
+          ,
+          activity_hours:
+            payload.activity_hours !== undefined ? payload.activity_hours : ticket.form_data?.activity_hours
         };
 
         const errors = validateTicketInput(candidateUpdate, { requireAll: false });
@@ -599,9 +751,26 @@ router.patch(
         const formData = {
           ...(ticket.form_data || {}),
           student_code: ticket.form_data?.student_code || req.session.ku_id || null,
-          full_name: ticket.form_data?.full_name || req.session.fullname || null,
-          faculty: ticket.form_data?.faculty || req.session.faculty || null,
-          department: ticket.form_data?.department || req.session.department || null,
+          full_name:
+            payload.full_name_thai !== undefined
+              ? String(payload.full_name_thai)
+              : (ticket.form_data?.full_name || ticket.form_data?.full_name_thai || req.session.fullname || null),
+          full_name_thai:
+            payload.full_name_thai !== undefined
+              ? String(payload.full_name_thai)
+              : (ticket.form_data?.full_name_thai || ticket.form_data?.full_name || req.session.fullname || null),
+          gender:
+            payload.gender !== undefined
+              ? String(payload.gender).toLowerCase()
+              : (ticket.form_data?.gender || null),
+          faculty:
+            payload.faculty !== undefined
+              ? String(payload.faculty)
+              : (ticket.form_data?.faculty || req.session.faculty || null),
+          department:
+            payload.department !== undefined
+              ? String(payload.department)
+              : (ticket.form_data?.department || req.session.department || null),
           academic_year:
             payload.academic_year !== undefined
               ? Number.parseInt(payload.academic_year, 10)
@@ -615,6 +784,10 @@ router.patch(
             payload.achievements !== undefined
               ? String(payload.achievements)
               : ticket.form_data?.achievements,
+          activity_hours:
+            payload.activity_hours !== undefined
+              ? String(payload.activity_hours)
+              : ticket.form_data?.activity_hours,
           updated_by: req.session.user_id,
           updated_at: new Date().toISOString()
         };
@@ -743,8 +916,13 @@ router.post('/:id/submit', [requireAuth, getUserRoles, requireSsoForStudentActio
         throw new Error(ERROR_MESSAGES.FORBIDDEN);
       }
 
-      const phase = await getCurrentPhase(client);
-      if (phase !== PHASES.NOMINATION) {
+      const ticketRoundId = getCurrentRoundId(ticket);
+      if (!ticketRoundId) {
+        throw new Error('Ticket is missing round_id.');
+      }
+
+      const phaseInfo = await ensureInitialNominationPhase(client, ticketRoundId);
+      if (phaseInfo.phase !== PHASES.NOMINATION) {
         throw new Error('Submission deadline passed. Ticket cannot be submitted.');
       }
 
@@ -755,7 +933,8 @@ router.post('/:id/submit', [requireAuth, getUserRoles, requireSsoForStudentActio
 
       const files = await getTicketFiles(client, ticketId);
       const fileCategories = new Set(files.map((f) => f.file_category));
-      const missingRequired = REQUIRED_FILE_CATEGORIES.filter((required) => !fileCategories.has(required));
+      const requiredFileCategories = getRequiredFileCategoriesForAward(ticket.award_type);
+      const missingRequired = requiredFileCategories.filter((required) => !fileCategories.has(required));
       if (missingRequired.length > 0) {
         throw new Error(`Missing required files: ${missingRequired.join(', ')}`);
       }
@@ -839,6 +1018,10 @@ router.patch('/:id/review', [requireAuth, getUserRoles], async (req, res) => {
       const ticket = await findTicketById(client, ticketId);
       if (!ticket) {
         throw new Error(ERROR_MESSAGES.TICKET_NOT_FOUND);
+      }
+
+      if (!isAdmin(req.userRoles) && !canStaffAccessTicketByScope(ticket, req)) {
+        throw new Error(ERROR_MESSAGES.FORBIDDEN);
       }
 
       const currentWorkflow = getCurrentWorkflowStatus(ticket);
@@ -1158,7 +1341,8 @@ router.get('/:id/history', [requireAuth, getUserRoles], async (req, res) => {
     }
 
     const isOwner = ticket.user_id === req.session.user_id;
-    const canView = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles);
+    const scopedStaffAccess = isStaffOrHigher(req.userRoles) && canStaffAccessTicketByScope(ticket, req);
+    const canView = isOwner || isAdmin(req.userRoles) || scopedStaffAccess;
 
     if (!canView) {
       return res.status(403).json({ message: ERROR_MESSAGES.FORBIDDEN });

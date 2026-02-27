@@ -8,7 +8,7 @@ const roleFallbackRoutes = {
   DEAN: '/staff/dashboard',
   ADMIN: '/admin/verification',
   COMMITTEE: '/committee/dashboard',
-  COMMITTEE_PRESIDENT: '/president/proclaim',
+  COMMITTEE_PRESIDENT: '/committee/dashboard',
 };
 
 const ProtectedRoute = ({ children, allowedRoles }) => {

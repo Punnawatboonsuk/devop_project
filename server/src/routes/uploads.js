@@ -52,6 +52,7 @@ function isTicketOwner(userRoles, ticketOwnerId) {
 router.post('/ticket/:ticketId', [requireAuth, getUserRoles], upload.fields([
   { name: 'transcript', maxCount: 1 },
   { name: 'portfolio', maxCount: 1 },
+  { name: 'activity_hours_proof', maxCount: 1 },
   { name: 'profile_photo', maxCount: 1 },
   { name: 'certificates', maxCount: 20 },
   { name: 'recommendation_letter', maxCount: 1 }
@@ -86,6 +87,7 @@ router.post('/ticket/:ticketId', [requireAuth, getUserRoles], upload.fields([
       const filesByCategory = {};
       if (req.files.transcript) filesByCategory.transcript = req.files.transcript;
       if (req.files.portfolio) filesByCategory.portfolio = req.files.portfolio;
+      if (req.files.activity_hours_proof) filesByCategory.activity_hours_proof = req.files.activity_hours_proof;
       if (req.files.profile_photo) filesByCategory.profile_photo = req.files.profile_photo;
       if (req.files.recommendation_letter) filesByCategory.recommendation_letter = req.files.recommendation_letter;
       if (req.files.certificates) filesByCategory.certificates = req.files.certificates;

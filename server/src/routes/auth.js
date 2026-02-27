@@ -8,6 +8,11 @@ const express = require('express');
 const { pool, transaction } = require('../config/database');
 const { hashpw, checkpw, gensalt } = require('../utils/ripcrypt');
 const passport = require('../config/passport');
+const {
+  getRoundByAcademic,
+  getActiveRound,
+  getCurrentPhaseForRound
+} = require('../services/roundPhase');
 
 const router = express.Router();
 
@@ -68,7 +73,7 @@ function getRedirectUrl(role) {
     DEAN: '/staff/dashboard',
     ADMIN: '/admin/verification',
     COMMITTEE: '/committee/dashboard',
-    COMMITTEE_PRESIDENT: '/president/proclaim',
+    COMMITTEE_PRESIDENT: '/committee/dashboard',
   };
   return roleRoutes[role] || '/login';
 }
@@ -92,6 +97,7 @@ function setSessionFromUser(req, user) {
   req.session.ku_id = user.ku_id || null;
   req.session.faculty = user.faculty || null;
   req.session.department = user.department || null;
+  req.session.profile_picture = user.google_profile_picture || null;
   req.session.roles = user.roles || [];
   req.session.primary_role = user.primary_role || getPrimaryRole(user.roles || []);
   req.session.sso_authenticated = true;
@@ -219,6 +225,7 @@ router.post('/login', async (req, res) => {
     req.session.ku_id = user.ku_id;
     req.session.faculty = user.faculty;
     req.session.department = user.department;
+    req.session.profile_picture = user.google_profile_picture || null;
     req.session.roles = roles;
     req.session.primary_role = primaryRole;
 
@@ -231,6 +238,7 @@ router.post('/login', async (req, res) => {
         ku_id: user.ku_id,
         faculty: user.faculty,
         department: user.department,
+        profile_picture: user.google_profile_picture || null,
         roles: roles,
         primary_role: primaryRole,
         needs_profile_completion: false,
@@ -446,6 +454,7 @@ router.post('/ku-sso-callback', async (req, res) => {
     req.session.ku_id = ku_id || user.ku_id;
     req.session.faculty = faculty || user.faculty;
     req.session.department = department || user.department;
+    req.session.profile_picture = user.google_profile_picture || null;
     req.session.roles = roles;
     req.session.primary_role = primaryRole;
     req.session.sso_authenticated = true;
@@ -463,6 +472,7 @@ router.post('/ku-sso-callback', async (req, res) => {
         ku_id: req.session.ku_id,
         faculty: req.session.faculty,
         department: req.session.department,
+        profile_picture: req.session.profile_picture || null,
         roles: roles,
         primary_role: primaryRole,
         needs_profile_completion: needsProfileCompletionFromSession(req),
@@ -521,6 +531,7 @@ router.get('/me', (req, res) => {
       ku_id: req.session.ku_id,
       faculty: req.session.faculty,
       department: req.session.department,
+      profile_picture: req.session.profile_picture || null,
       roles: req.session.roles,
       primary_role: req.session.primary_role,
       needs_profile_completion: needsProfileCompletion,
@@ -537,20 +548,33 @@ router.get('/phase', async (req, res) => {
   try {
     const client = await pool.connect();
     try {
-      const result = await client.query(
-        'SELECT phase FROM system_phase WHERE id = 1',
-        []
-      );
+      const year = Number.parseInt(req.query.year, 10);
+      const semester = Number.parseInt(req.query.semester, 10);
 
-      if (result.rows.length === 0) {
-        return res.status(404).json({ 
-          message: 'System phase not initialized',
-          phase: null
+      let round = null;
+      if (!Number.isNaN(year) && [1, 2].includes(semester)) {
+        round = await getRoundByAcademic(client, year, semester);
+      } else {
+        round = await getActiveRound(client);
+      }
+
+      if (!round) {
+        return res.status(404).json({
+          message: 'No round found',
+          phase: null,
+          round: null
         });
       }
 
+      const phaseInfo = await getCurrentPhaseForRound(client, round.id);
       return res.status(200).json({
-        phase: result.rows[0].phase
+        phase: phaseInfo?.phase || null,
+        round: {
+          id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          name: round.name
+        }
       });
 
     } finally {
@@ -613,6 +637,7 @@ router.post('/complete-profile', async (req, res) => {
         ku_id: req.session.ku_id,
         faculty: req.session.faculty,
         department: req.session.department,
+        profile_picture: req.session.profile_picture || null,
         roles: req.session.roles,
         primary_role: req.session.primary_role,
         needs_profile_completion: needsProfileCompletionFromSession(req),

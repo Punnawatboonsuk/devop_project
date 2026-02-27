@@ -13,7 +13,7 @@ const GoogleCallback = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
         <FaSpinner className="animate-spin mx-auto text-4xl text-green-600 mb-4" />
-        <p className="text-gray-600">Processing Google authentication...</p>
+        <p className="text-gray-600">กำลังดำเนินการยืนยันตัวตนด้วย Google...</p>
       </div>
     </div>
   );

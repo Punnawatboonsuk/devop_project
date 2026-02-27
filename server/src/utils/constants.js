@@ -43,26 +43,18 @@ const TICKET_STATUS = {
   NOT_APPROVED: 'not_approved'  // แพ้การโหวต (≤50%)
 };
 
-// Award Types (7 ประเภท)
+// Award Types (3 ประเภท)
 const AWARD_TYPES = {
-  ACADEMIC: 'academic',
-  SPORT: 'sport',
-  ARTS_CULTURE: 'arts_culture',
-  MORAL_ETHICS: 'moral_ethics',
-  SOCIAL_SERVICE: 'social_service',
-  INNOVATION: 'innovation',
-  ENTREPRENEURSHIP: 'entrepreneurship'
+  ACTIVITY_ENRICHMENT: 'activity_enrichment',
+  CREATIVITY_INNOVATION: 'creativity_innovation',
+  GOOD_BEHAVIOR: 'good_behavior'
 };
 
 // Award Type Labels (ภาษาไทย)
 const AWARD_TYPE_LABELS = {
-  academic: 'นิสิตดีเด่นด้านวิชาการ',
-  sport: 'นิสิตดีเด่นด้านกีฬา',
-  arts_culture: 'นิสิตดีเด่นด้านศิลปวัฒนธรรม',
-  moral_ethics: 'นิสิตดีเด่นด้านคุณธรรมจริยธรรม',
-  social_service: 'นิสิตดีเด่นด้านบริการสังคม',
-  innovation: 'นิสิตดีเด่นด้านนวัตกรรม',
-  entrepreneurship: 'นิสิตดีเด่นด้านผู้ประกอบการ'
+  activity_enrichment: '1.1. ด้านกิจกรรมเสริมหลักสูตร',
+  creativity_innovation: '1.2. ด้านความคิดสร้างสรรค์และนวัตกรรม',
+  good_behavior: '1.3. ด้านความประพฤติดี'
 };
 
 // Achievement Levels
@@ -102,24 +94,16 @@ const FILE_CONFIGS = {
   
   // Required files per award type
   REQUIRED_FILES: {
-    academic: ['transcript.pdf', 'certificate.pdf'],
-    sport: ['certificate.pdf', 'photo.jpg|photo.png'],
-    arts_culture: ['certificate.pdf', 'photo.jpg|photo.png'],
-    moral_ethics: ['certificate.pdf', 'activity_report.pdf'],
-    social_service: ['activity_report.pdf', 'certificate.pdf'],
-    innovation: ['prototype_doc.pdf', 'demo.mp4'],
-    entrepreneurship: ['business_plan.pdf', 'financial.xlsx']
+    activity_enrichment: ['transcript.pdf', 'activity_hours_proof.pdf'],
+    creativity_innovation: ['transcript.pdf', 'innovation_evidence.pdf'],
+    good_behavior: ['transcript.pdf', 'recommendation_letter.pdf']
   },
   
   // Optional files per award type
   OPTIONAL_FILES: {
-    academic: ['paper.pdf', 'portfolio.zip'],
-    sport: ['highlight.mp4'],
-    arts_culture: ['performance.mp4'],
-    moral_ethics: ['photo.jpg|photo.png'],
-    social_service: ['photo.jpg|photo.png'],
-    innovation: ['patent.pdf'],
-    entrepreneurship: ['pitch_deck.pptx']
+    activity_enrichment: ['certificate.pdf', 'portfolio.zip'],
+    creativity_innovation: ['certificate.pdf', 'prototype_doc.pdf'],
+    good_behavior: ['certificate.pdf', 'activity_report.pdf']
   }
 };
 

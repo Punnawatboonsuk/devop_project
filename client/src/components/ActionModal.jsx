@@ -21,9 +21,9 @@ const ActionModal = ({ isOpen, onClose, onConfirm, type = 'approve', title }) =>
           </div>
           <div>
             <h3 className={`text-lg font-bold ${isReject ? 'text-red-800' : 'text-green-900'}`}>
-              {title || (isReject ? 'Reject Application' : 'Approve Application')}
+              {title || (isReject ? 'ไม่อนุมัติใบสมัคร' : 'อนุมัติใบสมัคร')}
             </h3>
-            <p className="text-sm text-gray-500">This action cannot be undone.</p>
+            <p className="text-sm text-gray-500">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
           </div>
           <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
             <X size={20} />
@@ -33,25 +33,25 @@ const ActionModal = ({ isOpen, onClose, onConfirm, type = 'approve', title }) =>
         <div className="p-6">
           {isReject ? (
             <div className="space-y-3">
-              <label className="text-sm font-medium text-gray-700">Reason for rejection <span className="text-red-500">*</span></label>
+              <label className="text-sm font-medium text-gray-700">เหตุผลที่ไม่อนุมัติ <span className="text-red-500">*</span></label>
               <textarea
                 className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none transition-all"
                 rows="3"
-                placeholder="Ex. Missing activity hours document..."
+                placeholder="เช่น เอกสารชั่วโมงกิจกรรมไม่ครบ..."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
             </div>
           ) : (
             <p className="text-gray-600 leading-relaxed">
-              Are you sure you want to proceed? This application will be forwarded to the next stage immediately.
+              ยืนยันการดำเนินการหรือไม่ ใบสมัครนี้จะถูกส่งต่อไปยังขั้นตอนถัดไปทันที
             </p>
           )}
         </div>
 
         <div className="p-4 bg-gray-50 flex justify-end gap-3 border-t border-gray-100">
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl text-gray-600 hover:bg-gray-200 text-sm font-medium transition-colors">
-            Cancel
+            ยกเลิก
           </button>
           <button 
             onClick={() => {
@@ -64,7 +64,7 @@ const ActionModal = ({ isOpen, onClose, onConfirm, type = 'approve', title }) =>
                 ? 'bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed' 
                 : 'bg-ku-main hover:bg-green-800'}`}
           >
-            Confirm {isReject ? 'Reject' : 'Approve'}
+            ยืนยัน{isReject ? 'ไม่อนุมัติ' : 'อนุมัติ'}
           </button>
         </div>
       </div>

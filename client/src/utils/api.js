@@ -10,9 +10,10 @@
  * @returns {Promise} - The fetch promise
  */
 export const apiRequest = async (url, options = {}) => {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const defaultOptions = {
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
     },
     ...options,
@@ -28,9 +29,10 @@ export const apiRequest = async (url, options = {}) => {
  * @returns {Promise} - The fetch promise with response handling
  */
 export const authenticatedApiRequest = async (url, options = {}) => {
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const defaultOptions = {
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
     },
     credentials: 'include', // Include cookies for session authentication

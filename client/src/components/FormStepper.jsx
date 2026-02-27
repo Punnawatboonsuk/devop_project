@@ -2,9 +2,9 @@ import React from 'react';
 
 const FormStepper = ({ currentStep }) => {
   const steps = [
-    { num: 1, title: 'Category' },
-    { num: 2, title: 'Details' },
-    { num: 3, title: 'Review' }
+    { num: 1, title: 'หมวดรางวัล' },
+    { num: 2, title: 'รายละเอียด' },
+    { num: 3, title: 'ตรวจทาน' }
   ];
 
   return (
