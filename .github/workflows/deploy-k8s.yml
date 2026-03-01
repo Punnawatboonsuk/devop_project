@@ -1,92 +1,56 @@
-# name: Deploy To Minikube
-
-# on:
-#   push:
-#     branches:
-#       - main
-#   workflow_dispatch:
-
-# jobs:
-#   deploy:
-#     runs-on: [self-hosted, windows, devops]
-
-#     steps:
-#       - name: Checkout
-#         uses: actions/checkout@v4
-
-#       - name: Verify cluster tools
-#         shell: powershell
-#         run: |
-#           kubectl version --client
-#           minikube version
-#           minikube status
-#           minikube addons enable ingress
-
-#       - name: Build images inside minikube
-#         shell: powershell
-#         run: |
-#           minikube image build -t nisit-client:latest ./client
-#           minikube image build -t nisit-server:latest ./server
-
-#       - name: Apply Kubernetes manifests
-#         shell: powershell
-#         run: |
-#           kubectl apply -f k8s/postgres.yaml
-#           kubectl apply -f k8s/backend.yaml
-#           kubectl apply -f k8s/frontend.yaml
-#           kubectl apply -f k8s/ingress.yaml
-
-#       - name: Wait for rollouts
-#         shell: powershell
-#         run: |
-#           kubectl rollout status deployment/postgres --timeout=180s
-#           kubectl rollout status deployment/nisit-server --timeout=180s
-#           kubectl rollout status deployment/nisit-client --timeout=180s
-#           kubectl get pods,svc,ingress
-
-#       - name: Run database migrations
-#         shell: powershell
-#         run: |
-#           kubectl delete pod nisit-migrate --ignore-not-found=true
-#           kubectl run nisit-migrate --restart=Never --image=nisit-server:latest --env="DATABASE_URL=postgresql://postgres:password@postgres:5432/nisit" --command -- node scripts/migrate.js
-#           kubectl wait --for=condition=Succeeded pod/nisit-migrate --timeout=300s
-#           kubectl logs nisit-migrate
-#           kubectl delete pod nisit-migrate --ignore-not-found=true
-
-
-name: Project CI Success Check
+name: Deploy To Minikube
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build-and-test:
-    # ใช้ GitHub-hosted runner (เครื่องของ GitHub เอง)
-    runs-on: ubuntu-latest 
+  deploy:
+    runs-on: [self-hosted, windows, devops]
 
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          # แนะนำให้เพิ่ม cache: 'npm' เพื่อให้ build ครั้งต่อไปเร็วขึ้น
-          cache: 'npm'
-
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Generate Prisma Client
-        working-directory: ./server  # เพิ่มบรรทัดนี้เพื่อให้มันเข้าไปในโฟลเดอร์ server
-        run: npx prisma generate
-
-      - name: Build Project
+      - name: Verify cluster tools
+        shell: powershell
         run: |
-          echo "Building Client..."
-          # หากมีคำสั่ง build จริง เช่น npm run build ให้เอาคอมเมนต์ออกด้านล่างนี้
-          # npm run build 
-          echo "Building Server..."
-          echo "CI Process Completed Successfully!"
+          kubectl version --client
+          minikube version
+          minikube status
+          minikube addons enable ingress
+
+      - name: Build images inside minikube
+        shell: powershell
+        run: |
+          minikube image build -t nisit-client:latest ./client
+          minikube image build -t nisit-server:latest ./server
+
+      - name: Apply Kubernetes manifests
+        shell: powershell
+        run: |
+          kubectl apply -f k8s/postgres.yaml
+          kubectl apply -f k8s/backend.yaml
+          kubectl apply -f k8s/frontend.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Wait for rollouts
+        shell: powershell
+        run: |
+          kubectl rollout status deployment/postgres --timeout=180s
+          kubectl rollout status deployment/nisit-server --timeout=180s
+          kubectl rollout status deployment/nisit-client --timeout=180s
+          kubectl get pods,svc,ingress
+
+      - name: Run database migrations
+        shell: powershell
+        run: |
+          kubectl delete pod nisit-migrate --ignore-not-found=true
+          kubectl run nisit-migrate --restart=Never --image=nisit-server:latest --env="DATABASE_URL=postgresql://postgres:password@postgres:5432/nisit" --command -- node scripts/migrate.js
+          kubectl wait --for=condition=Succeeded pod/nisit-migrate --timeout=300s
+          kubectl logs nisit-migrate
+          kubectl delete pod nisit-migrate --ignore-not-found=true
+
+
