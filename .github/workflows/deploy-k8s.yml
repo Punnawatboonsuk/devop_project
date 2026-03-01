@@ -79,7 +79,8 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Prisma Generate
+      - name: Generate Prisma Client
+        working-directory: ./server  # เพิ่มบรรทัดนี้เพื่อให้มันเข้าไปในโฟลเดอร์ server
         run: npx prisma generate
 
       - name: Build Project
