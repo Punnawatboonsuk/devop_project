@@ -62,31 +62,30 @@ on:
 
 jobs:
   build-and-test:
-    # ใช้เครื่องของ GitHub โดยตรง ไม่ต้องรอเครื่องเราออนไลน์
+    # ใช้ GitHub-hosted runner (เครื่องของ GitHub เอง)
     runs-on: ubuntu-latest 
 
     steps:
-      
-name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      
-name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # แนะนำให้เพิ่ม cache: 'npm' เพื่อให้ build ครั้งต่อไปเร็วขึ้น
+          cache: 'npm'
 
-      
-name: Install Dependencies
-      run: npm install
+      - name: Install Dependencies
+        run: npm install
 
-      
-name: Prisma Generate
-      run: npx prisma generate
+      - name: Prisma Generate
+        run: npx prisma generate
 
-      
-name: Build Project
-      run: |
-        echo "Building Client..."# ถ้ามีคำสั่ง build จริงๆ ให้ใส่ตรงนี้ เช่น npm run build
-        echo "Building Server..."
-        echo "CI Process Completed Successfully!"
+      - name: Build Project
+        run: |
+          echo "Building Client..."
+          # หากมีคำสั่ง build จริง เช่น npm run build ให้เอาคอมเมนต์ออกด้านล่างนี้
+          # npm run build 
+          echo "Building Server..."
+          echo "CI Process Completed Successfully!"
