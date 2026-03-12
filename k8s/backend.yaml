@@ -22,17 +22,21 @@ spec:
             - name: PORT
               value: "5000"
             - name: DATABASE_URL
-              value: postgresql://postgres:password@postgres:5432/nisit
+              value: postgresql://postgres:password@postgres:5432/nisit?sslmode=disable
             - name: FRONTEND_URL
-              value: http://nisit-uat.local
+              value: http://nisit.k8s.dev
             - name: CORS_ORIGIN
-              value: http://nisit-uat.local
+              value: http://nisit.k8s.dev
             - name: GOOGLE_CALLBACK_URL
-              value: http://nisit-uat.local/api/auth/google/callback
+              value: http://nisit.k8s.dev/api/auth/google/callback
             - name: SESSION_COOKIE_SECURE
               value: "false"
             - name: SESSION_SECRET
               value: change-this-before-final-demo
+            - name: GOOGLE_CLIENT_ID
+              value: "ใส่_Client_ID_ของคุณที่นี่"
+            - name: GOOGLE_CLIENT_SECRET
+              value: "ใส่_Client_Secret_ของคุณที่นี่"
           ports:
             - containerPort: 5000
 ---
