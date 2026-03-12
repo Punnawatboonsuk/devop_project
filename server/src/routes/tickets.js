@@ -539,7 +539,7 @@ router.get('/:id', [requireAuth, getUserRoles], async (req, res) => {
 
 router.post(
   '/',
-  [requireAuth, getUserRoles, requireSsoForStudentAction],
+  [requireAuth, getUserRoles],
   async (req, res) => {
     if (!hasRole(req.userRoles, ROLES.STUDENT)) {
       return res.status(403).json({ message: ERROR_MESSAGES.FORBIDDEN });
@@ -688,7 +688,7 @@ router.post(
 
 router.patch(
   '/:id',
-  [requireAuth, getUserRoles, requireSsoForStudentAction],
+  [requireAuth, getUserRoles],
   async (req, res) => {
     const ticketId = Number.parseInt(req.params.id, 10);
     if (Number.isNaN(ticketId)) {
@@ -862,7 +862,7 @@ router.patch(
   }
 );
 
-router.delete('/:id', [requireAuth, getUserRoles, requireSsoForStudentAction], async (req, res) => {
+router.delete('/:id', [requireAuth, getUserRoles], async (req, res) => {
   const ticketId = Number.parseInt(req.params.id, 10);
   if (Number.isNaN(ticketId)) {
     return res.status(400).json({ message: 'Invalid ticket id.' });
@@ -906,7 +906,7 @@ router.delete('/:id', [requireAuth, getUserRoles, requireSsoForStudentAction], a
   }
 });
 
-router.post('/:id/submit', [requireAuth, getUserRoles, requireSsoForStudentAction], async (req, res) => {
+router.post('/:id/submit', [requireAuth, getUserRoles], async (req, res) => {
   const ticketId = Number.parseInt(req.params.id, 10);
   if (Number.isNaN(ticketId)) {
     return res.status(400).json({ message: 'Invalid ticket id.' });

@@ -343,7 +343,11 @@ function renderCertificatePdf(doc, { round, winners, presidentSignaturePath = nu
       ensureSpace(46);
       const sectionTitle = AWARD_SECTION_TITLES[awardType] || `นิสิตดีเด่นประเภท ${awardType}`;
       doc.moveDown(0.6);
-      doc.fontSize(14).text(sectionTitle, { align: 'center' });
+      doc.x = doc.page.margins.left;
+      doc.fontSize(14).text(sectionTitle, {
+        align: 'center',
+        width: doc.page.width - doc.page.margins.left - doc.page.margins.right
+      });
       doc.moveDown(0.45);
 
       for (const row of rows) {
