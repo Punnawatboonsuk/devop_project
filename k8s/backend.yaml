@@ -22,7 +22,7 @@ spec:
             - name: PORT
               value: "5000"
             - name: DATABASE_URL
-              value: postgresql://postgres:password@postgres:5432/nisit
+              value: postgresql://postgres:password@postgres:5432/nisit?sslmode=disable
             - name: FRONTEND_URL
               value: http://nisit-uat.local
             - name: CORS_ORIGIN
