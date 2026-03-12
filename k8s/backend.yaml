@@ -34,9 +34,9 @@ spec:
             - name: SESSION_SECRET
               value: change-this-before-final-demo
             - name: GOOGLE_CLIENT_ID
-              value: "ใส่_Client_ID_ของคุณที่นี่"
+              value: 479342713077-6mefnrab9mlk4mee2vbekepasfbs8e5p.apps.googleusercontent.com
             - name: GOOGLE_CLIENT_SECRET
-              value: "ใส่_Client_Secret_ของคุณที่นี่"
+              value: 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
           ports:
             - containerPort: 5000
 ---

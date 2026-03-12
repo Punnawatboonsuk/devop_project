@@ -48,7 +48,7 @@ jobs:
         shell: powershell
         run: |
           kubectl delete pod nisit-migrate --ignore-not-found=true
-          kubectl run nisit-migrate --restart=Never --image=nisit-server:latest --env="DATABASE_URL=postgresql://postgres:password@postgres:5432/nisit" --command -- node scripts/migrate.js
+          kubectl run nisit-migrate --restart=Never --image=nisit-server:latest --env="DATABASE_URL=postgresql://postgres:password@postgres:5432/nisit?sslmode=disable" --command -- node scripts/migrate.js
           kubectl wait --for=condition=Succeeded pod/nisit-migrate --timeout=300s
           kubectl logs nisit-migrate
           kubectl delete pod nisit-migrate --ignore-not-found=true
