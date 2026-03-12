@@ -33,6 +33,10 @@ spec:
               value: "false"
             - name: SESSION_SECRET
               value: change-this-before-final-demo
+            - name: GOOGLE_CLIENT_ID
+              value: "ใส่_Client_ID_ของคุณที่นี่"
+            - name: GOOGLE_CLIENT_SECRET
+              value: "ใส่_Client_Secret_ของคุณที่นี่"
           ports:
             - containerPort: 5000
 ---
