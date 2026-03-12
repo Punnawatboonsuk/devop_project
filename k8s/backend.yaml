@@ -37,6 +37,10 @@ spec:
               value: 479342713077-6mefnrab9mlk4mee2vbekepasfbs8e5p.apps.googleusercontent.com
             - name: GOOGLE_CLIENT_SECRET
               value: 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
+            - name: MAX_FILE_SIZE
+              value: "52428800"
+            - name: CERT_THAI_FONT_PATH
+              value: "/app/fonts/THSarabunNew.ttf"
           ports:
             - containerPort: 5000
 ---
