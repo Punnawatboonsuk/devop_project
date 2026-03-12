@@ -117,7 +117,7 @@ const StudentDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="ส่งใบสมัครทั้งหมด" value={totalTickets} icon={FileText} color="bg-blue-50 text-blue-600" />
+        <StatCard title="ใบสมัครทั้งหมด" value={totalTickets} icon={FileText} color="bg-blue-50 text-blue-600" />
         <StatCard title="รอตรวจสอบ" value={pendingTickets} icon={Clock} color="bg-orange-50 text-orange-600" />
         <StatCard title="ผ่านอนุมัติ" value={approvedTickets} icon={CheckCircle} color="bg-green-50 text-green-600" />
       </div>

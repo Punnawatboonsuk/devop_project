@@ -14,13 +14,9 @@ const AWARD_COLORS = {
 };
 
 const AWARD_LABELS = {
-  academic: 'ด้านวิชาการ',
-  sport: 'ด้านกีฬา',
-  arts_culture: 'ด้านศิลปวัฒนธรรม',
-  moral_ethics: 'ด้านคุณธรรมจริยธรรม',
-  social_service: 'ด้านบำเพ็ญประโยชน์',
-  innovation: 'ด้านนวัตกรรม',
-  entrepreneurship: 'ด้านผู้ประกอบการ'
+  activity_enrichment: '1.1. ด้านกิจกรรมเสริมหลักสูตร',
+  creativity_innovation: '1.2. ด้านความคิดสร้างสรรค์และนวัตกรรม',
+  good_behavior: '1.3. ด้านความประพฤติดี'
 };
 
 const getCategoryColor = (category) => AWARD_COLORS[category] || 'bg-gray-100 text-gray-700';

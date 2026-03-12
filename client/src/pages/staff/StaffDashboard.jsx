@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Loader2, Users, Clock3, ListChecks } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
@@ -72,18 +72,33 @@ const StaffDashboard = () => {
   );
 
   const currentStudentCount = useMemo(() => {
+    const filtered = tickets.filter((ticket) => {
+      if (role === 'STAFF') {
+        return String(ticket.department || '') === String(user?.department || '');
+      }
+      if (role === 'SUB_DEAN' || role === 'DEAN') {
+        return String(ticket.faculty || '') === String(user?.faculty || '');
+      }
+      return false;
+    });
+
     const studentIds = new Set(
-      queueByRole
+      filtered
         .map((ticket) => ticket.student_code || ticket.student_id)
         .filter(Boolean)
     );
     return studentIds.size;
-  }, [queueByRole]);
+  }, [tickets, role, user?.department, user?.faculty]);
 
   const scopeText =
     role === 'STAFF'
       ? `${user?.department || '-'} (เฉพาะสาขา)`
       : `${user?.faculty || '-'} (ทั้งคณะ)`;
+
+  const studentCountTitle =
+    role === 'STAFF'
+      ? 'นิสิตทั้งหมดในสาขา'
+      : 'นิสิตทั้งหมดในคณะ';
 
   const previewList = queueByRole.slice(0, 5);
 
@@ -114,7 +129,7 @@ const StaffDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="นิสิตในคิวปัจจุบัน" value={currentStudentCount} icon={Users} color="bg-blue-50 text-blue-600" />
+        <StatCard title={studentCountTitle} value={currentStudentCount} icon={Users} color="bg-blue-50 text-blue-600" />
         <StatCard title="คำขอรอตรวจสอบ" value={queueByRole.length} icon={Clock3} color="bg-orange-50 text-orange-600" />
         <StatCard title="คำขอในขอบเขตทั้งหมด" value={tickets.length} icon={ListChecks} color="bg-emerald-50 text-emerald-600" />
       </div>

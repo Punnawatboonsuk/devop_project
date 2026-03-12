@@ -1,4 +1,4 @@
-export const facultyDepartmentData = {
+﻿export const facultyDepartmentData = {
   "คณะเกษตร": [
     "พืชไร่นา",
     "พืชสวน", 

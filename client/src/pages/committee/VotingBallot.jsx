@@ -1,17 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Check, X, FileText, Star, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authenticatedApiRequest } from '../../utils/api';
+import FilePreviewButton from '../../components/FilePreviewButton';
 
 const AWARD_LABELS = {
-  academic: 'ด้านวิชาการ',
-  sport: 'ด้านกีฬา',
-  arts_culture: 'ด้านศิลปวัฒนธรรม',
-  moral_ethics: 'ด้านคุณธรรมจริยธรรม',
-  social_service: 'ด้านบำเพ็ญประโยชน์',
-  innovation: 'ด้านนวัตกรรม',
-  entrepreneurship: 'ด้านผู้ประกอบการ'
+  activity_enrichment: '1.1. ด้านกิจกรรมเสริมหลักสูตร',
+  creativity_innovation: '1.2. ด้านความคิดสร้างสรรค์และนวัตกรรม',
+  good_behavior: '1.3. ด้านความประพฤติดี'
 };
 
 const fileTypeLabel = (mimeType = '') => {
@@ -32,6 +29,7 @@ const VotingBallot = () => {
   const [candidate, setCandidate] = useState(null);
   const [files, setFiles] = useState([]);
   const [selectedVote, setSelectedVote] = useState(null);
+  const [phase, setPhase] = useState(null);
 
   useEffect(() => {
     const fetchCandidate = async () => {
@@ -47,8 +45,10 @@ const VotingBallot = () => {
         setCandidate(payload?.candidate || null);
         setFiles(Array.isArray(payload?.files) ? payload.files : []);
         setSelectedVote(payload?.candidate?.my_vote || null);
+        setPhase(payload?.phase || null);
       } catch (fetchError) {
         setError(fetchError.message || 'ไม่สามารถโหลดรายละเอียดผู้เข้าชิงได้');
+        setPhase(null);
       } finally {
         setLoading(false);
       }
@@ -59,7 +59,11 @@ const VotingBallot = () => {
     }
   }, [id]);
 
-  const canSubmit = useMemo(() => !candidate?.my_vote && selectedVote, [candidate?.my_vote, selectedVote]);
+  const isVotingPhase = String(phase || '').toUpperCase() === 'VOTING';
+  const canSubmit = useMemo(
+    () => isVotingPhase && !candidate?.my_vote && selectedVote,
+    [candidate?.my_vote, selectedVote, isVotingPhase]
+  );
 
   const handleVote = async () => {
     if (!selectedVote || !candidate?.id) return;
@@ -177,10 +181,10 @@ const VotingBallot = () => {
                   <p className="text-sm text-gray-500">ไม่มีไฟล์หลักฐาน</p>
                 ) : (
                   files.map((file) => (
-                    <a
+                    <FilePreviewButton
                       key={file.id}
-                      href={file.download_url}
-                      className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100 hover:border-blue-200"
+                      file={file}
+                      className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100 hover:border-blue-200 w-full text-left"
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-8 h-8 rounded bg-white border border-gray-200 flex items-center justify-center text-xs font-bold text-gray-500">
@@ -188,7 +192,7 @@ const VotingBallot = () => {
                         </div>
                         <div className="font-semibold text-gray-800 text-sm truncate">{file.original_name}</div>
                       </div>
-                    </a>
+                    </FilePreviewButton>
                   ))
                 )}
               </div>
@@ -203,14 +207,16 @@ const VotingBallot = () => {
                 <>
                   <div className="flex gap-2">
                     <button
-                      className={`flex-1 py-3 rounded-lg font-bold border ${selectedVote === 'not_approved' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'}`}
+                      className={`flex-1 py-3 rounded-lg font-bold border ${selectedVote === 'not_approved' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-red-600 border-red-200 hover:bg-red-50'} disabled:opacity-60 disabled:cursor-not-allowed`}
                       onClick={() => setSelectedVote('not_approved')}
+                      disabled={!isVotingPhase || submitting}
                     >
                       <X size={20} className="inline mr-1" /> ไม่อนุมัติ
                     </button>
                     <button
-                      className={`flex-1 py-3 rounded-lg font-bold border ${selectedVote === 'approved' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-green-600 border-green-200 hover:bg-green-50'}`}
+                      className={`flex-1 py-3 rounded-lg font-bold border ${selectedVote === 'approved' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-green-600 border-green-200 hover:bg-green-50'} disabled:opacity-60 disabled:cursor-not-allowed`}
                       onClick={() => setSelectedVote('approved')}
+                      disabled={!isVotingPhase || submitting}
                     >
                       <Check size={20} className="inline mr-1" /> อนุมัติ
                     </button>

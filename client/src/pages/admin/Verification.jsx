@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle, Loader2, RefreshCcw, Search, Download, Clock, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StatusBadge from '../../components/StatusBadge';
 import ActionModal from '../../components/ActionModal';
+import FilePreviewButton from '../../components/FilePreviewButton';
 import { authenticatedApiRequest } from '../../utils/api';
 
 const AWARD_LABELS = {
@@ -362,10 +363,14 @@ const Verification = () => {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {selectedFiles.map((file) => (
-                        <a key={file.id} href={`/api/uploads/file/${file.id}/download`} className="p-3 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm">
+                        <FilePreviewButton
+                          key={file.id}
+                          file={file}
+                          className="p-3 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm text-left"
+                        >
                           <p className="font-bold text-gray-700 truncate">{file.original_name}</p>
                           <p className="text-xs text-gray-500">{file.file_category}</p>
-                        </a>
+                        </FilePreviewButton>
                       ))}
                     </div>
                   )}

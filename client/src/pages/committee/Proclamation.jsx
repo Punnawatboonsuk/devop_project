@@ -1,29 +1,27 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, FileCheck, Loader2, Upload, X } from 'lucide-react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, FileCheck, Loader2, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authenticatedApiRequest } from '../../utils/api';
 import { useAuth } from '../../hooks/useAuth';
+import FilePreviewModal from '../../components/FilePreviewModal';
 
 const AWARD_LABELS = {
-  academic: 'ด้านวิชาการ',
-  sport: 'ด้านกีฬา',
-  arts_culture: 'ด้านศิลปวัฒนธรรม',
-  moral_ethics: 'ด้านคุณธรรมจริยธรรม',
-  social_service: 'ด้านบำเพ็ญประโยชน์',
-  innovation: 'ด้านนวัตกรรม',
-  entrepreneurship: 'ด้านผู้ประกอบการ'
+  activity_enrichment: '1.1. ด้านกิจกรรมเสริมหลักสูตร',
+  creativity_innovation: '1.2. ด้านความคิดสร้างสรรค์และนวัตกรรม',
+  good_behavior: '1.3. ด้านความประพฤติดี'
 };
 
 const Proclamation = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [publishing, setPublishing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [uploadingSigned, setUploadingSigned] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [signedPreviewUrl, setSignedPreviewUrl] = useState('');
   const [error, setError] = useState('');
   const [showHistory, setShowHistory] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [selectedHistoryIdx, setSelectedHistoryIdx] = useState(0);
-  const [signatureFile, setSignatureFile] = useState(null);
+  const [signedFile, setSignedFile] = useState(null);
   const [data, setData] = useState({
     round: null,
     phase: null,
@@ -40,7 +38,7 @@ const Proclamation = () => {
       roleList.includes('COMMITTEE_PRESIDENT')
     );
   }, [user]);
-  const canPublish = Boolean(data?.permissions?.can_publish) && isPresident;
+  const isCertificatePhase = String(data?.phase || '').toUpperCase() === 'CERTIFICATE';
   const canViewCurrentResults = useMemo(() => {
     const currentPhase = String(data?.phase || '').toUpperCase();
     return ['VOTING', 'VOTING_END', 'CERTIFICATE'].includes(currentPhase);
@@ -75,51 +73,42 @@ const Proclamation = () => {
     fetchProclamation();
   }, []);
 
+  useEffect(() => {
+    const loadSignedPreview = async () => {
+      if (!isPresident) return;
+      if (!data?.round?.academic_year || !data?.round?.semester) return;
+      if (String(data?.phase || '').toUpperCase() !== 'CERTIFICATE') {
+        setSignedPreviewUrl('');
+        return;
+      }
+
+      try {
+        const response = await authenticatedApiRequest(
+          `/api/certificates/signed-latest?academic_year=${data.round.academic_year}&semester=${data.round.semester}`
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setSignedPreviewUrl('');
+          return;
+        }
+        if (payload?.download_url) {
+          const viewUrl = payload.download_url.replace('/download', '/view');
+          setSignedPreviewUrl(viewUrl);
+        } else {
+          setSignedPreviewUrl('');
+        }
+      } catch {
+        setSignedPreviewUrl('');
+      }
+    };
+
+    loadSignedPreview();
+  }, [data?.phase, data?.round?.academic_year, data?.round?.semester, isPresident]);
+
   const selectedHistory = useMemo(
     () => (data.history?.[selectedHistoryIdx] ? data.history[selectedHistoryIdx] : null),
     [data.history, selectedHistoryIdx]
   );
-
-  const handleSignAndAnnounce = () => {
-    if (!canPublish) {
-      toast.error('เฉพาะประธานกรรมการเท่านั้นที่ลงนามประกาศผลได้');
-      return;
-    }
-    if (!signatureFile) {
-      toast.error('กรุณาอัปโหลดไฟล์ลายเซ็นก่อนประกาศผล');
-      return;
-    }
-    setShowConfirm(true);
-  };
-
-  const confirmSignAndAnnounce = async () => {
-    try {
-      setPublishing(true);
-      const formData = new FormData();
-      formData.append('signature', signatureFile);
-      if (data?.round?.id) {
-        formData.append('round_id', String(data.round.id));
-      }
-
-      const response = await authenticatedApiRequest('/api/votes/proclamation/publish', {
-        method: 'POST',
-        body: formData
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.message || 'ไม่สามารถเผยแพร่ประกาศผลได้');
-      }
-
-      toast.success('ลงนามและประกาศผลเรียบร้อย');
-      setSignatureFile(null);
-      setShowConfirm(false);
-      await fetchProclamation();
-    } catch (publishError) {
-      toast.error(publishError.message || 'ไม่สามารถเผยแพร่ประกาศผลได้');
-    } finally {
-      setPublishing(false);
-    }
-  };
 
   const handleExportCertificate = async () => {
     if (!isPresident) {
@@ -131,28 +120,64 @@ const Proclamation = () => {
       return;
     }
 
+    setExporting(true);
+    const year = data?.round?.academic_year;
+    const semester = data?.round?.semester;
+    const query = year && semester ? `academic_year=${year}&semester=${semester}` : '';
+    setPreviewFile({
+      url: `/api/certificates/preview${query ? `?${query}` : ''}`,
+      name: 'ประกาศผล.pdf',
+      mimeType: 'application/pdf'
+    });
+    setExporting(false);
+  };
+
+  const handleUploadSigned = async () => {
+    if (!isPresident) {
+      toast.error('เฉพาะประธานคณะกรรมการเท่านั้น');
+      return;
+    }
+    if (!isCertificatePhase) {
+      toast.error(`อัปโหลดได้เฉพาะช่วง CERTIFICATE (สถานะปัจจุบัน: ${data?.phase || 'NONE'})`);
+      return;
+    }
+    if (!signedFile) {
+      toast.error('กรุณาเลือกไฟล์ PDF ที่ลงนามแล้ว');
+      return;
+    }
+
     try {
-      setExporting(true);
-      const response = await authenticatedApiRequest('/api/certificates/generate', {
+      setUploadingSigned(true);
+      const formData = new FormData();
+      formData.append('signed_file', signedFile);
+      if (data?.round?.id) {
+        formData.append('round_id', String(data.round.id));
+      }
+
+      const response = await authenticatedApiRequest('/api/certificates/upload-signed', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          round_id: data?.round?.id || null
-        })
+        body: formData
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.message || 'ไม่สามารถส่งออกไฟล์ประกาศได้');
+        throw new Error(payload?.message || 'ไม่สามารถอัปโหลดไฟล์ที่ลงนามแล้วได้');
       }
 
-      toast.success(payload?.message || 'ส่งออกไฟล์ประกาศเรียบร้อย');
+      toast.success(payload?.message || 'อัปโหลดไฟล์ที่ลงนามแล้วเรียบร้อย');
+      setSignedFile(null);
       if (payload?.download_url) {
-        window.open(payload.download_url, '_blank', 'noopener,noreferrer');
+        const viewUrl = payload.download_url.replace('/download', '/view');
+        setSignedPreviewUrl(viewUrl);
+        setPreviewFile({
+          url: viewUrl,
+          name: 'ประกาศผล (ลงนามแล้ว).pdf',
+          mimeType: 'application/pdf'
+        });
       }
-    } catch (exportError) {
-      toast.error(exportError.message || 'ไม่สามารถส่งออกไฟล์ประกาศได้');
+    } catch (uploadError) {
+      toast.error(uploadError.message || 'ไม่สามารถอัปโหลดไฟล์ที่ลงนามแล้วได้');
     } finally {
-      setExporting(false);
+      setUploadingSigned(false);
     }
   };
 
@@ -169,16 +194,6 @@ const Proclamation = () => {
         </div>
 
         <div className="flex gap-2">
-          {canPublish && (
-            <button
-              onClick={handleSignAndAnnounce}
-              disabled={publishing || loading || data.winners.length === 0 || !signatureFile}
-              className="bg-ku-main text-white px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2 shadow-xl hover:bg-green-800 transition disabled:opacity-60"
-            >
-              {publishing ? <Loader2 size={18} className="animate-spin" /> : <FileCheck size={18} />}
-              ลงนามและประกาศผล
-            </button>
-          )}
           {isPresident && (
             <button
               onClick={handleExportCertificate}
@@ -198,30 +213,60 @@ const Proclamation = () => {
         </div>
       </div>
 
-      {!canPublish && !canViewCurrentResults && (
+      {!canViewCurrentResults && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-blue-700 text-sm">
           {isPresident
-            ? `รอผู้ดูแลระบบปิดโหวตเป็น VOTING_END ก่อนจึงจะลงนามและประกาศผลได้ (สถานะปัจจุบัน: ${data.phase || 'NONE'})`
-            : 'บัญชีกรรมการทั่วไปสามารถดูได้เฉพาะประวัติประกาศผลเท่านั้น การลงนามและประกาศผลทำได้เฉพาะประธานกรรมการ'}
+            ? `สามารถส่งออกและอัปโหลดไฟล์ที่ลงนามแล้วได้เมื่ออยู่ในช่วง CERTIFICATE (สถานะปัจจุบัน: ${data.phase || 'NONE'})`
+            : 'บัญชีกรรมการทั่วไปสามารถดูได้เฉพาะประวัติประกาศผลเท่านั้น'}
         </div>
       )}
 
-      {canPublish && (
+      {isPresident && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <label className="block text-sm font-bold text-gray-700 mb-2">อัปโหลดลายเซ็นประธาน (ไฟล์ภาพ)</label>
-          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white cursor-pointer hover:bg-gray-50">
+          <label className="block text-sm font-bold text-gray-700 mb-2">อัปโหลดไฟล์ประกาศที่ลงนามแล้ว (PDF)</label>
+          <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white cursor-pointer hover:bg-gray-50 ${!isCertificatePhase ? 'opacity-60 cursor-not-allowed' : ''}`}>
             <Upload size={16} />
-            <span>{signatureFile ? 'เปลี่ยนไฟล์ลายเซ็น' : 'เลือกไฟล์ลายเซ็น'}</span>
+            <span>{signedFile ? 'เปลี่ยนไฟล์ประกาศ' : 'เลือกไฟล์ PDF'}</span>
             <input
               type="file"
               className="hidden"
-              accept="image/*"
-              onChange={(event) => setSignatureFile(event.target.files?.[0] || null)}
+              accept="application/pdf,.pdf"
+              disabled={!isCertificatePhase}
+              onChange={(event) => setSignedFile(event.target.files?.[0] || null)}
             />
           </label>
           <p className="text-xs text-gray-500 mt-2">
-            {signatureFile ? `ไฟล์ที่เลือก: ${signatureFile.name}` : 'ยังไม่ได้เลือกไฟล์'}
+            {signedFile ? `ไฟล์ที่เลือก: ${signedFile.name}` : 'ยังไม่ได้เลือกไฟล์'}
           </p>
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleUploadSigned}
+              disabled={uploadingSigned || loading || !isCertificatePhase || !signedFile}
+              className="bg-ku-main text-white px-5 py-2 rounded-lg font-bold inline-flex items-center gap-2 shadow hover:bg-green-800 transition disabled:opacity-60"
+            >
+              {uploadingSigned ? <Loader2 size={16} className="animate-spin" /> : <FileCheck size={16} />}
+              อัปโหลดไฟล์ที่ลงนามแล้ว
+            </button>
+            {signedPreviewUrl && (
+              <button
+                type="button"
+                onClick={() =>
+                  setPreviewFile({
+                    url: signedPreviewUrl,
+                    name: 'ประกาศผล (ลงนามแล้ว).pdf',
+                    mimeType: 'application/pdf'
+                  })
+                }
+                className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-100"
+              >
+                ดูไฟล์ที่ลงนามแล้ว
+              </button>
+            )}
+            {!isCertificatePhase && (
+              <span className="text-xs text-gray-500">อัปโหลดได้เฉพาะช่วง CERTIFICATE</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -363,51 +408,11 @@ const Proclamation = () => {
         </>
       )}
 
-      {showConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !publishing && setShowConfirm(false)} />
-          <div className="relative z-10 w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
-            <div className="p-5 border-b border-gray-100 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-bold text-gray-800">ยืนยันลงนามและประกาศผล</h3>
-                <p className="text-sm text-gray-500 mt-1">การดำเนินการนี้ย้อนกลับไม่ได้</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => !publishing && setShowConfirm(false)}
-                className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
-                disabled={publishing}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-5 text-sm text-gray-700">
-              ยืนยันประกาศผลรอบ {data.round?.name || `${data.round?.academic_year || '-'} / ${data.round?.semester || '-'}`} โดยใช้ไฟล์ลายเซ็น <span className="font-semibold">{signatureFile?.name || '-'}</span> ใช่หรือไม่?
-            </div>
-
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowConfirm(false)}
-                disabled={publishing}
-                className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-50"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={confirmSignAndAnnounce}
-                disabled={publishing}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-ku-main text-white hover:bg-green-800 disabled:opacity-60"
-              >
-                {publishing ? <Loader2 size={16} className="animate-spin" /> : null}
-                ยืนยันประกาศผล
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <FilePreviewModal
+        open={Boolean(previewFile)}
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
+      />
     </div>
   );
 };

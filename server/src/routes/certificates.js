@@ -1,6 +1,7 @@
 ﻿const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
 const PDFDocument = require('pdfkit');
 const { pool, transaction } = require('../config/database');
 const { ROLES, PHASES, CERTIFICATE_STATUS, LOG_ACTIONS } = require('../utils/constants');
@@ -13,14 +14,45 @@ if (!fs.existsSync(certificateDir)) {
   fs.mkdirSync(certificateDir, { recursive: true });
 }
 
+const signedUpload = multer({
+  dest: certificateDir,
+  fileFilter: (req, file, cb) => {
+    const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      return cb(new Error('Signed file must be a PDF.'));
+    }
+    return cb(null, true);
+  }
+});
+
+function uploadSignedMiddleware(req, res, next) {
+  signedUpload.single('signed_file')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ message: err.message || 'Invalid signed file upload.' });
+    }
+    return next();
+  });
+}
+
 const AWARD_SECTION_TITLES = {
-  good_behavior: 'เธเธดเธชเธดเธ•เธ—เธตเนเธกเธตเธเธงเธฒเธกเธเธฃเธฐเธเธคเธ•เธดเธ”เธตเน€เธ”เนเธ',
-  activity_enrichment: 'เธเธดเธชเธดเธ•เธ—เธตเนเธกเธตเธเธฅเธเธฒเธเธ”เธตเน€เธ”เนเธเธ”เนเธฒเธเธเธดเธเธเธฃเธฃเธกเน€เธชเธฃเธดเธกเธซเธฅเธฑเธเธชเธนเธ•เธฃ',
-  creativity_innovation: 'เธเธดเธชเธดเธ•เธ—เธตเนเธกเธตเธเธฅเธเธฒเธเธ”เธตเน€เธ”เนเธเธ”เนเธฒเธเธเธงเธฒเธกเธเธดเธ”เธชเธฃเนเธฒเธเธชเธฃเธฃเธเนเนเธฅเธฐเธเธงเธฑเธ•เธเธฃเธฃเธก',
-  moral_ethics: 'เธเธดเธชเธดเธ•เธ—เธตเนเธกเธตเธเธงเธฒเธกเธเธฃเธฐเธเธคเธ•เธดเธ”เธตเน€เธ”เนเธ',
-  social_service: 'เธเธดเธชเธดเธ•เธ—เธตเนเธกเธตเธเธฅเธเธฒเธเธ”เธตเน€เธ”เนเธเธ”เนเธฒเธเธเธณเน€เธเนเธเธเธฃเธฐเนเธขเธเธเน',
-  innovation: 'เธเธดเธชเธดเธ•เธ—เธตเนเธกเธตเธเธฅเธเธฒเธเธ”เธตเน€เธ”เนเธเธ”เนเธฒเธเธเธงเธฑเธ•เธเธฃเธฃเธก'
+  activity_enrichment: 'นิสิตที่มีผลงานดีเด่นด้านกิจกรรมเสริมหลักสูตร',
+  creativity_innovation: 'นิสิตที่มีผลงานดีเด่นด้านความคิดสร้างสรรค์และนวัตกรรม',
+  good_behavior: 'นิสิตที่มีความประพฤติดีเด่น'
 };
+
+const AWARD_ORDER = ['activity_enrichment', 'creativity_innovation', 'good_behavior'];
+
+function toThaiNumber(value) {
+  const map = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙'];
+  return String(value || '')
+    .split('')
+    .map((ch) => (/\d/.test(ch) ? map[Number(ch)] : ch))
+    .join('');
+}
+
+function semesterLabel(semester) {
+  return Number(semester) === 1 ? 'ภาคต้น' : 'ภาคปลาย';
+}
 
 function isAdmin(userRoles = []) {
   return userRoles.includes(ROLES.ADMIN);
@@ -261,6 +293,120 @@ function resolveThaiFontPath() {
   return null;
 }
 
+function renderCertificatePdf(doc, { round, winners, presidentSignaturePath = null, thaiFontPath }) {
+  doc.font(thaiFontPath);
+
+  const pageBottom = () => doc.page.height - doc.page.margins.bottom;
+  const ensureSpace = (needed = 24) => {
+    if (doc.y + needed > pageBottom()) {
+      doc.addPage();
+      doc.font(thaiFontPath);
+    }
+  };
+
+  const sortedWinners = [...winners].sort((a, b) => {
+    const aa = AWARD_ORDER.indexOf(String(a.award_type || ''));
+    const bb = AWARD_ORDER.indexOf(String(b.award_type || ''));
+    if (aa !== bb) return aa - bb;
+    return String(a.fullname || '').localeCompare(String(b.fullname || ''));
+  });
+
+  const groups = new Map();
+  for (const winner of sortedWinners) {
+    const key = String(winner.award_type || 'other');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(winner);
+  }
+
+  doc.fontSize(16).text(
+    `ประกาศรายชื่อผู้ที่มีผลงานดีเด่น ${semesterLabel(round.semester)} ประจำปีการศึกษา ${toThaiNumber(round.academic_year)}`,
+    { align: 'center' }
+  );
+  doc.moveDown(0.4);
+  doc.moveDown(1.1);
+
+  const nameX = doc.page.margins.left + 20;
+  const facultyX = doc.page.width * 0.48 + 20;
+  const rowHeight = 22;
+
+  const orderedGroups = new Map();
+  for (const key of AWARD_ORDER) {
+    if (groups.has(key)) orderedGroups.set(key, groups.get(key));
+  }
+
+  if (orderedGroups.size === 0) {
+    doc.moveDown(0.6);
+    doc.fontSize(12).text('ไม่พบผู้ชนะในรอบนี้', { align: 'center' });
+    doc.moveDown(1.2);
+  } else {
+    for (const [awardType, rows] of orderedGroups.entries()) {
+      ensureSpace(46);
+      const sectionTitle = AWARD_SECTION_TITLES[awardType] || `นิสิตดีเด่นประเภท ${awardType}`;
+      doc.moveDown(0.6);
+      doc.fontSize(14).text(sectionTitle, { align: 'center' });
+      doc.moveDown(0.45);
+
+      for (const row of rows) {
+        ensureSpace(rowHeight + 4);
+        const fullName = withHonorific(row.fullname, row.gender);
+        const facultyName = String(row.faculty || '-');
+        const nameWidth = Math.max(120, facultyX - nameX - 18);
+        const facultyWidth = doc.page.width - doc.page.margins.right - facultyX;
+        const rowY = doc.y;
+
+        doc.fontSize(12).text(fullName, nameX, rowY, {
+          width: nameWidth,
+          lineBreak: false
+        });
+        doc.fontSize(12).text(facultyName, facultyX, rowY, {
+          width: facultyWidth,
+          lineBreak: false
+        });
+        doc.y = rowY + rowHeight;
+      }
+      doc.moveDown(0.7);
+    }
+  }
+
+  ensureSpace(160);
+  doc.moveDown(1.2);
+  const rightX = doc.page.width - doc.page.margins.right;
+  const blockWidth = 240;
+  const gap = 24;
+  const signY = doc.y;
+
+  const blockX = rightX - blockWidth;
+  const signatureHeight = 70;
+
+  if (presidentSignaturePath && fs.existsSync(presidentSignaturePath)) {
+    try {
+      doc.image(presidentSignaturePath, blockX + 40, signY, { fit: [160, signatureHeight], align: 'left' });
+    } catch {}
+  }
+
+  const lineY = signY + signatureHeight + gap;
+  doc.fontSize(12).text('(..................................)', blockX, lineY, {
+    width: blockWidth,
+    align: 'center'
+  });
+  doc.fontSize(12).text('ลงนามรับรอง ประธานคณะกรรมการคัดเลือกนิสิตดีเด่น', blockX, lineY + 18, {
+    width: blockWidth,
+    align: 'center'
+  });
+
+  const rectorLineY = lineY + 90;
+  doc.fontSize(12).text('(..................................)', blockX, rectorLineY, {
+    width: blockWidth,
+    align: 'center'
+  });
+  doc.fontSize(12).text('ลงนามรับรอง อธิการบดีที่ปรึกษาคัดเลือกนิสิตดีเด่น', blockX, rectorLineY + 18, {
+    width: blockWidth,
+    align: 'center'
+  });
+
+  doc.end();
+}
+
 function createCertificatePdf({ filePath, round, winners, presidentSignaturePath = null, thaiFontPath }) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 72 });
@@ -271,88 +417,7 @@ function createCertificatePdf({ filePath, round, winners, presidentSignaturePath
     doc.on('error', reject);
 
     doc.pipe(stream);
-    doc.font(thaiFontPath);
-
-    const pageBottom = () => doc.page.height - doc.page.margins.bottom;
-    const ensureSpace = (needed = 24) => {
-      if (doc.y + needed > pageBottom()) {
-        doc.addPage();
-        doc.font(thaiFontPath);
-      }
-    };
-
-    const sortedWinners = [...winners].sort((a, b) => {
-      const aa = String(a.award_type || '');
-      const bb = String(b.award_type || '');
-      if (aa !== bb) return aa.localeCompare(bb);
-      return String(a.fullname || '').localeCompare(String(b.fullname || ''));
-    });
-
-    const groups = new Map();
-    for (const winner of sortedWinners) {
-      const key = String(winner.award_type || 'other');
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(winner);
-    }
-
-    doc.fontSize(18).text(`ประกาศรายชื่อนิสิตดีเด่นภายในคณะฯ ประจำปีการศึกษา ${round.academic_year}`, {
-      align: 'center'
-    });
-    doc.fontSize(17).text(`ภาคเรียนที่ ${round.semester}`, { align: 'center' });
-    doc.moveDown(0.4);
-    doc.fontSize(14).text('มหาวิทยาลัยเกษตรศาสตร์', { align: 'center' });
-    doc.moveDown(1.1);
-
-    const nameX = doc.page.margins.left;
-    const facultyX = doc.page.width * 0.56;
-    const rowHeight = 22;
-
-    for (const [awardType, rows] of groups.entries()) {
-      ensureSpace(46);
-      const sectionTitle = AWARD_SECTION_TITLES[awardType] || `นิสิตดีเด่นประเภท ${awardType}`;
-      doc.moveDown(0.6);
-      doc.fontSize(15).text(sectionTitle, { align: 'center' });
-      doc.moveDown(0.45);
-
-      for (const row of rows) {
-        ensureSpace(rowHeight + 4);
-        const fullName = withHonorific(row.fullname, row.gender);
-        const facultyName = String(row.faculty || '-');
-        const nameWidth = Math.max(120, facultyX - nameX - 18);
-        const facultyWidth = doc.page.width - doc.page.margins.right - facultyX;
-
-        doc.fontSize(14).text(fullName, nameX, doc.y, {
-          width: nameWidth,
-          lineBreak: false
-        });
-        doc.fontSize(14).text(facultyName, facultyX, doc.y, {
-          width: facultyWidth,
-          lineBreak: false
-        });
-        doc.moveDown(1);
-      }
-      doc.moveDown(0.7);
-    }
-
-    ensureSpace(115);
-    doc.moveDown(1.6);
-    doc.fontSize(14).text('ประธานคณะกรรมการคัดเลือกนิสิตดีเด่น', { align: 'right' });
-    doc.moveDown(0.3);
-    if (presidentSignaturePath && fs.existsSync(presidentSignaturePath)) {
-      try {
-        const signX = doc.page.width - doc.page.margins.right - 170;
-        doc.image(presidentSignaturePath, signX, doc.y, { fit: [160, 70], align: 'right' });
-        doc.moveDown(3.2);
-      } catch {
-        doc.moveDown(2.5);
-      }
-    } else {
-      doc.moveDown(2.5);
-    }
-    doc.fontSize(14).text('(....................................................)', { align: 'right' });
-    doc.fontSize(13).text('ลงนามเพื่อเสนออธิการบดีพิจารณาประกาศผล', { align: 'right' });
-
-    doc.end();
+    renderCertificatePdf(doc, { round, winners, presidentSignaturePath, thaiFontPath });
   });
 }
 // POST /api/certificates/generate - Generate round certificate/proclamation PDF
@@ -400,9 +465,10 @@ router.post('/generate', requireAdminOrPresident, async (req, res) => {
       for (const winner of winners) {
         const certificateNumber = `ND-${round.academic_year}-${round.semester}-${winner.ticket_id}`;
         const existing = await client.query(
-          `SELECT id
+          `SELECT id, status
            FROM certificates
            WHERE ticket_id = $1
+           ORDER BY updated_at DESC NULLS LAST, id DESC
            LIMIT 1`,
           [winner.ticket_id]
         );
@@ -424,7 +490,7 @@ router.post('/generate', requireAdminOrPresident, async (req, res) => {
           proclamation_signature: winner.proclamation_signature || null
         };
 
-        if (existing.rows.length > 0) {
+        if (existing.rows.length > 0 && ![CERTIFICATE_STATUS.SIGNED, CERTIFICATE_STATUS.PUBLISHED].includes(existing.rows[0].status)) {
           await client.query(
             `UPDATE certificates
              SET certificate_number = $1,
@@ -557,6 +623,169 @@ router.get('/pending', requireAdminOrPresident, async (req, res) => {
   }
 });
 
+// GET /api/certificates/preview - Preview unsigned certificate package (no save)
+router.get('/preview', requireAdminOrPresident, async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const round = await resolveRound(client, req.query || {});
+      if (!round) {
+        return res.status(404).json({ message: 'Round not found' });
+      }
+
+      const phaseInfo = await getCurrentPhaseForRound(client, round.id);
+      if (!phaseInfo || phaseInfo.phase !== PHASES.CERTIFICATE) {
+        return res.status(400).json({
+          message: `Certificate preview is allowed only in CERTIFICATE phase (current phase: ${phaseInfo?.phase || 'NONE'})`
+        });
+      }
+
+      let winners = await getRoundWinnersForCertificate(client, round.id);
+      if (winners.length === 0) {
+        winners = await getRoundWinnersFromVotes(client, round.id);
+      }
+      if (winners.length === 0) {
+        // Allow preview with "no winners" notice.
+      }
+
+      const thaiFontPath = resolveThaiFontPath();
+      if (!thaiFontPath) {
+        return res.status(400).json({
+          message: 'Thai font not found on server. Please set CERT_THAI_FONT_PATH to a valid .ttf (e.g. THSarabunNew.ttf).'
+        });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline; filename="proclamation-preview.pdf"');
+
+      const doc = new PDFDocument({ size: 'A4', margin: 72 });
+      doc.on('error', (err) => {
+        console.error('Preview PDF error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ message: 'Error generating preview' });
+        }
+      });
+      doc.pipe(res);
+      renderCertificatePdf(doc, { round, winners, presidentSignaturePath: null, thaiFontPath });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Preview certificates error:', error);
+    return res.status(500).json({ message: 'Error generating preview' });
+  }
+});
+
+// GET /api/certificates/signed-latest - Get latest signed certificate package for round
+router.get('/signed-latest', requireAdminOrPresident, async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const round = await resolveRound(client, req.query || {});
+      if (!round) {
+        return res.status(404).json({ message: 'Round not found' });
+      }
+
+      let result = await client.query(
+        `SELECT c.id, c.pdf_path, c.signed_at, c.updated_at
+         FROM certificates c
+         JOIN tickets t ON t.id = c.ticket_id
+         WHERE t.round_id = $1
+           AND c.status = $2::certificate_status
+         ORDER BY c.signed_at DESC NULLS LAST, c.updated_at DESC
+         LIMIT 1`,
+        [round.id, CERTIFICATE_STATUS.SIGNED]
+      );
+
+      if (result.rows.length === 0) {
+        result = await client.query(
+          `SELECT c.id, c.pdf_path, c.signed_at, c.updated_at, c.status
+           FROM certificates c
+           JOIN tickets t ON t.id = c.ticket_id
+           WHERE t.round_id = $1
+           ORDER BY c.updated_at DESC
+           LIMIT 1`,
+          [round.id]
+        );
+      }
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: 'Signed certificate package not found for this round.' });
+      }
+
+      const signed = result.rows[0];
+      if (!signed.pdf_path || !fs.existsSync(signed.pdf_path)) {
+        return res.status(404).json({ message: 'Signed certificate file not found.' });
+      }
+
+      return res.status(200).json({
+        round: {
+          id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          name: round.name
+        },
+        certificate_id: signed.id,
+        download_url: `/api/certificates/${signed.id}/download`
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Get signed certificate error:', error);
+    return res.status(500).json({ message: 'Error fetching signed certificate' });
+  }
+});
+
+// GET /api/certificates/published-latest - Get latest published certificate package for round
+router.get('/published-latest', requireAdmin, async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const round = await resolveRound(client, req.query || {});
+      if (!round) {
+        return res.status(404).json({ message: 'Round not found' });
+      }
+
+      const result = await client.query(
+        `SELECT c.id, c.pdf_path, c.published_at, c.updated_at
+         FROM certificates c
+         JOIN tickets t ON t.id = c.ticket_id
+         WHERE t.round_id = $1
+           AND c.status = $2::certificate_status
+         ORDER BY c.published_at DESC NULLS LAST, c.updated_at DESC
+         LIMIT 1`,
+        [round.id, CERTIFICATE_STATUS.PUBLISHED]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: 'Published certificate package not found for this round.' });
+      }
+
+      const published = result.rows[0];
+      if (!published.pdf_path || !fs.existsSync(published.pdf_path)) {
+        return res.status(404).json({ message: 'Published certificate file not found.' });
+      }
+
+      return res.status(200).json({
+        round: {
+          id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          name: round.name
+        },
+        certificate_id: published.id,
+        download_url: `/api/certificates/${published.id}/download`
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Get published certificate error:', error);
+    return res.status(500).json({ message: 'Error fetching published certificate' });
+  }
+});
+
 // POST /api/certificates/:id/sign - Sign (president)
 router.post('/:id/sign', requirePresident, async (req, res) => {
   const certificateId = Number.parseInt(req.params.id, 10);
@@ -605,6 +834,176 @@ router.post('/:id/sign', requirePresident, async (req, res) => {
   } catch (error) {
     console.error('Sign certificate error:', error);
     return res.status(400).json({ message: error.message || 'Error signing certificate' });
+  }
+});
+
+// POST /api/certificates/upload-signed - Upload signed proclamation PDF (president)
+router.post('/upload-signed', [requirePresident, uploadSignedMiddleware], async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Signed PDF file is required.' });
+    }
+
+    const result = await transaction(async (client) => {
+      const round = await resolveRound(client, req.body || {});
+      if (!round) {
+        throw new Error('Round not found');
+      }
+
+      const phaseInfo = await getCurrentPhaseForRound(client, round.id);
+      if (!phaseInfo || phaseInfo.phase !== PHASES.CERTIFICATE) {
+        throw new Error(`Signed upload is allowed only in CERTIFICATE phase (current phase: ${phaseInfo?.phase || 'NONE'})`);
+      }
+
+      const certResult = await client.query(
+        `SELECT c.id
+         FROM certificates c
+         JOIN tickets t ON t.id = c.ticket_id
+         WHERE t.round_id = $1`,
+        [round.id]
+      );
+      if (certResult.rows.length === 0) {
+        throw new Error('No certificates found for this round.');
+      }
+
+      const signedFilename = `certificate-signed-round-${round.id}-${Date.now()}.pdf`;
+      const signedPath = path.join(certificateDir, signedFilename);
+      fs.renameSync(req.file.path, signedPath);
+
+      const certificateIds = certResult.rows.map((row) => row.id);
+      await client.query(
+        `UPDATE certificates
+         SET pdf_path = $1,
+             status = $2::certificate_status,
+             signed_by = $3,
+             signed_at = NOW(),
+             updated_at = NOW()
+         WHERE id = ANY($4::int[])`,
+        [signedPath, CERTIFICATE_STATUS.SIGNED, req.session.user_id, certificateIds]
+      );
+
+      await createAuditLog(client, req.session.user_id, LOG_ACTIONS.CERTIFICATE_SIGN, {
+        resourceType: 'certificate',
+        resourceId: certificateIds[0],
+        newValues: {
+          round_id: round.id,
+          signed_count: certificateIds.length,
+          file_path: signedPath
+        }
+      });
+
+      return {
+        round,
+        certificateId: certificateIds[0]
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Signed certificate package uploaded successfully',
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester,
+        name: result.round.name
+      },
+      download_url: result.certificateId ? `/api/certificates/${result.certificateId}/download` : null
+    });
+  } catch (error) {
+    console.error('Upload signed certificates error:', error);
+    return res.status(400).json({ message: error.message || 'Error uploading signed certificate package' });
+  }
+});
+
+// POST /api/certificates/upload-published - Upload signed proclamation PDF (admin with dean signature)
+router.post('/upload-published', [requireAdmin, uploadSignedMiddleware], async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Signed PDF file is required.' });
+    }
+
+    const result = await transaction(async (client) => {
+      const round = await resolveRound(client, req.body || {});
+      if (!round) {
+        throw new Error('Round not found');
+      }
+
+      const phaseInfo = await getCurrentPhaseForRound(client, round.id);
+      if (!phaseInfo || phaseInfo.phase !== PHASES.CERTIFICATE) {
+        throw new Error(`Signed upload is allowed only in CERTIFICATE phase (current phase: ${phaseInfo?.phase || 'NONE'})`);
+      }
+
+      const certResult = await client.query(
+        `SELECT c.ticket_id, c.certificate_number, c.template_data
+         FROM certificates c
+         JOIN tickets t ON t.id = c.ticket_id
+         WHERE t.round_id = $1
+         ORDER BY c.updated_at DESC NULLS LAST, c.id DESC`,
+        [round.id]
+      );
+      if (certResult.rows.length === 0) {
+        throw new Error('No certificates found for this round.');
+      }
+
+      const publishedFilename = `certificate-published-round-${round.id}-${Date.now()}.pdf`;
+      const publishedPath = path.join(certificateDir, publishedFilename);
+      fs.renameSync(req.file.path, publishedPath);
+
+      const latestByTicket = new Map();
+      for (const row of certResult.rows) {
+        if (!latestByTicket.has(row.ticket_id)) {
+          latestByTicket.set(row.ticket_id, row);
+        }
+      }
+
+      const inserted = [];
+      for (const [ticketId, row] of latestByTicket.entries()) {
+        const insertResult = await client.query(
+          `INSERT INTO certificates (ticket_id, certificate_number, status, pdf_path, published_by, published_at, template_data)
+           VALUES ($1, $2, $3::certificate_status, $4, $5, NOW(), $6::jsonb)
+           RETURNING id`,
+          [
+            ticketId,
+            row.certificate_number || null,
+            CERTIFICATE_STATUS.PUBLISHED,
+            publishedPath,
+            req.session.user_id,
+            JSON.stringify(row.template_data || {})
+          ]
+        );
+        inserted.push({ id: insertResult.rows[0].id, ticket_id: ticketId });
+      }
+
+      await createAuditLog(client, req.session.user_id, LOG_ACTIONS.CERTIFICATE_PUBLISH, {
+        resourceType: 'certificate',
+        resourceId: inserted[0]?.id || null,
+        newValues: {
+          round_id: round.id,
+          published_count: inserted.length,
+          file_path: publishedPath
+        }
+      });
+
+      return {
+        round,
+        certificateId: inserted[0]?.id || null
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Published certificate package uploaded successfully',
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester,
+        name: result.round.name
+      },
+      download_url: result.certificateId ? `/api/certificates/${result.certificateId}/download` : null
+    });
+  } catch (error) {
+    console.error('Upload published certificates error:', error);
+    return res.status(400).json({ message: error.message || 'Error uploading published certificate package' });
   }
 });
 
@@ -704,6 +1103,56 @@ router.get('/:id/download', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('Download certificate error:', error);
     return res.status(500).json({ message: 'Error downloading certificate' });
+  }
+});
+
+// GET /api/certificates/:id/view - Inline preview (PDF)
+router.get('/:id/view', requireAuth, async (req, res) => {
+  const certificateId = Number.parseInt(req.params.id, 10);
+  if (Number.isNaN(certificateId)) {
+    return res.status(400).json({ message: 'Invalid certificate id' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `SELECT
+           c.id,
+           c.pdf_path,
+           c.certificate_number,
+           c.ticket_id,
+           t.user_id
+         FROM certificates c
+         JOIN tickets t ON t.id = c.ticket_id
+         WHERE c.id = $1`,
+        [certificateId]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: 'Certificate not found' });
+      }
+
+      const certificate = result.rows[0];
+      const canView =
+        isAdmin(req.userRoles) || isPresident(req.userRoles) || Number(certificate.user_id) === Number(req.session.user_id);
+      if (!canView) {
+        return res.status(403).json({ message: 'Access denied' });
+      }
+
+      if (!certificate.pdf_path || !fs.existsSync(certificate.pdf_path)) {
+        return res.status(404).json({ message: 'Certificate file not found' });
+      }
+
+      const filename = `${certificate.certificate_number || `certificate-${certificate.id}`}.pdf`;
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      res.setHeader('Content-Type', 'application/pdf');
+      return res.sendFile(certificate.pdf_path);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('View certificate error:', error);
+    return res.status(500).json({ message: 'Error viewing certificate' });
   }
 });
 

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Download, Clock, CheckCircle2, AlertCircle, Loader2, Edit3 } from 'lucide-react';
 import StatusBadge from '../../components/StatusBadge';
+import FilePreviewButton from '../../components/FilePreviewButton';
 import { authenticatedApiRequest } from '../../utils/api';
 
 const AWARD_LABELS = {
@@ -166,10 +167,10 @@ const TicketDetail = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
               {files.map((file) => (
-                <a
+                <FilePreviewButton
                   key={file.id}
-                  href={`/api/uploads/file/${file.id}/download`}
-                  className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white hover:border-blue-300 transition cursor-pointer group"
+                  file={file}
+                  className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-white hover:border-blue-300 transition cursor-pointer group w-full text-left"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-xs text-gray-500">
@@ -181,7 +182,7 @@ const TicketDetail = () => {
                     </div>
                   </div>
                   <Download size={18} className="text-gray-400 group-hover:text-blue-600" />
-                </a>
+                </FilePreviewButton>
               ))}
             </div>
           )}

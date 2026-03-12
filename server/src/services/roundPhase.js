@@ -62,7 +62,7 @@ async function getCurrentPhaseForRound(client, roundId) {
 }
 
 async function getActiveRound(client) {
-  const result = await client.query(
+  const openResult = await client.query(
     `SELECT sr.id, sr.academic_year, sr.semester, sr.name, sr.created_at
      FROM selection_round sr
      JOIN round_phase_history rph ON rph.round_id = sr.id
@@ -70,7 +70,25 @@ async function getActiveRound(client) {
      ORDER BY sr.academic_year DESC, sr.semester DESC, rph.started_at DESC
      LIMIT 1`
   );
-  return result.rows[0] || null;
+  const openRound = openResult.rows[0] || null;
+
+  const latestResult = await client.query(
+    `SELECT sr.id, sr.academic_year, sr.semester, sr.name, sr.created_at
+     FROM selection_round sr
+     ORDER BY sr.academic_year DESC, sr.semester DESC, sr.created_at DESC
+     LIMIT 1`
+  );
+  const latestRound = latestResult.rows[0] || null;
+
+  if (!openRound) return latestRound;
+  if (!latestRound) return openRound;
+
+  const openKey = [openRound.academic_year, openRound.semester];
+  const latestKey = [latestRound.academic_year, latestRound.semester];
+
+  if (latestKey[0] > openKey[0]) return latestRound;
+  if (latestKey[0] === openKey[0] && latestKey[1] > openKey[1]) return latestRound;
+  return openRound;
 }
 
 async function ensureInitialNominationPhase(client, roundId, startedBy = null, notes = null) {

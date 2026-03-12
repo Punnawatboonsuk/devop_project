@@ -308,6 +308,9 @@ function hydrateTicketResponse(ticket) {
     reviewed_at: ticket.reviewed_at,
     reviewed_by: ticket.reviewed_by || null,
     status_log: Array.isArray(formData.status_log) ? formData.status_log : [],
+    total_votes: ticket.total_votes || 0,
+    approved_votes: ticket.approved_votes || 0,
+    vote_percentage: ticket.vote_percentage || 0,
     created_at: ticket.created_at,
     updated_at: ticket.updated_at
   };

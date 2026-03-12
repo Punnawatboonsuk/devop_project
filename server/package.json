@@ -13,7 +13,10 @@
     "create-dean": "node scripts/createDean.js",
     "create-committee": "node scripts/createCommittee.js",
     "create-committee-president": "node scripts/createCommitteePresident.js",
-    "set-phase": "node scripts/setPhase.js"
+    "set-phase": "node scripts/setPhase.js",
+    "seed-rounds": "node scripts/seedRounds.js",
+    "seed-round-2568s1": "node scripts/seedRound2568S1.js",
+    "seed-one": "node scripts/seedOneOfEach.js"
   },
   "keywords": [
     "ku",

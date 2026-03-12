@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Loader2, ArrowLeftCircle, ArrowRightCircle, RefreshCcw, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import StatusBadge from '../../components/StatusBadge';
 import { authenticatedApiRequest } from '../../utils/api';
+import FilePreviewButton from '../../components/FilePreviewButton';
 
 const AWARD_LABELS = {
   activity_enrichment: '1.1 ด้านกิจกรรมเสริมหลักสูตร',
@@ -305,11 +306,15 @@ const TicketTracker = () => {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {selectedFiles.map((file) => (
-                        <a key={file.id} href={`/api/uploads/file/${file.id}/download`} className="p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm">
+                        <FilePreviewButton
+                          key={file.id}
+                          file={file}
+                          className="p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm text-left"
+                        >
                           <p className="font-bold text-gray-700 truncate">{file.original_name}</p>
                           <p className="text-xs text-gray-500">{file.file_category}</p>
-                          <span className="text-xs text-ku-main inline-flex items-center gap-1 mt-1"><Download size={12} /> ดาวน์โหลด</span>
-                        </a>
+                          <span className="text-xs text-ku-main inline-flex items-center gap-1 mt-1"><Download size={12} /> ดูไฟล์</span>
+                        </FilePreviewButton>
                       ))}
                     </div>
                   )}

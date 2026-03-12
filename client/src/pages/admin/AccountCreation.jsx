@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Edit3, Loader2, Plus, Search, UserPlus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import FacultyDepartmentSelector from '../../components/FacultyDepartmentSelector';
@@ -44,7 +44,8 @@ const editInitial = {
   ku_id: '',
   role: 'STUDENT',
   faculty: '',
-  department: ''
+  department: '',
+  password: ''
 };
 
 const AccountCreation = () => {
@@ -114,7 +115,8 @@ const AccountCreation = () => {
       ku_id: user.ku_id || '',
       role: user.primary_role || 'STUDENT',
       faculty: user.faculty || '',
-      department: user.department || ''
+      department: user.department || '',
+      password: ''
     });
   };
 
@@ -190,6 +192,9 @@ const AccountCreation = () => {
     if (editNeedDepartment && !editForm.department.trim()) {
       return 'บทบาทนี้ต้องระบุภาควิชา';
     }
+    if (editForm.password && editForm.password.length < 8) {
+      return 'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร';
+    }
     return '';
   };
 
@@ -210,7 +215,8 @@ const AccountCreation = () => {
           role: editForm.role,
           ku_id: editNeedKuId ? editForm.ku_id.trim() : '',
           faculty: editNeedFaculty ? editForm.faculty.trim() : '',
-          department: editNeedDepartment ? editForm.department.trim() : ''
+          department: editNeedDepartment ? editForm.department.trim() : '',
+          password: editForm.password ? editForm.password : ''
         })
       });
       const payload = await response.json().catch(() => ({}));
@@ -389,6 +395,17 @@ const AccountCreation = () => {
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">ตั้งรหัสผ่านใหม่ (ถ้าต้องการเปลี่ยน)</label>
+            <input
+              type="password"
+              value={editForm.password}
+              onChange={(event) => setEditForm((prev) => ({ ...prev, password: event.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-ku-main/30"
+              placeholder="อย่างน้อย 8 ตัวอักษร"
+            />
           </div>
 
           {editNeedKuId && (

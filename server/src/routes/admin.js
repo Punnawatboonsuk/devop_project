@@ -64,6 +64,81 @@ function validateKuEmail(email = '') {
   return kuPattern.test(email);
 }
 
+async function getCommitteeCount(client) {
+  const result = await client.query(
+    `SELECT COUNT(DISTINCT ur.user_id)::int AS total
+     FROM user_roles ur
+     JOIN roles r ON ur.role_id = r.id
+     WHERE r.name IN ($1, $2)`,
+    [ROLES.COMMITTEE, ROLES.COMMITTEE_PRESIDENT]
+  );
+  return result.rows[0]?.total || 0;
+}
+
+async function getRoundVoteWinners(client, roundId) {
+  const totalCommittee = await getCommitteeCount(client);
+  const threshold = Math.floor(totalCommittee / 2) + 1;
+  if (threshold <= 0) return { winners: [], threshold };
+
+  const result = await client.query(
+    `SELECT
+       t.id,
+       t.award_type,
+       t.created_at,
+       COUNT(v.id)::int AS total_votes,
+       COUNT(CASE WHEN v.vote = 'approved' THEN 1 END)::int AS approved_votes
+     FROM tickets t
+     LEFT JOIN votes v ON v.ticket_id = t.id
+     WHERE t.round_id = $1
+       AND t.status = $2
+     GROUP BY t.id
+     ORDER BY t.award_type ASC, t.created_at ASC`,
+    [roundId, TICKET_STATUS.APPROVED]
+  );
+
+  const byAward = new Map();
+  for (const row of result.rows) {
+    if (!byAward.has(row.award_type)) byAward.set(row.award_type, []);
+    byAward.get(row.award_type).push({
+      id: row.id,
+      award_type: row.award_type,
+      approved_votes: row.approved_votes || 0,
+      total_votes: row.total_votes || 0,
+      created_at: row.created_at
+    });
+  }
+
+  const winners = [];
+  for (const [, candidates] of byAward.entries()) {
+    const qualified = candidates
+      .filter((item) => item.approved_votes >= threshold)
+      .sort((a, b) => {
+        if (b.approved_votes !== a.approved_votes) {
+          return b.approved_votes - a.approved_votes;
+        }
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+    if (qualified.length > 0) {
+      winners.push(qualified[0].id);
+    }
+  }
+
+  return { winners, threshold };
+}
+
+async function getCommitteeMembers(client) {
+  const result = await client.query(
+    `SELECT u.id, u.fullname, u.email, r.name AS role
+     FROM users u
+     JOIN user_roles ur ON ur.user_id = u.id
+     JOIN roles r ON r.id = ur.role_id
+     WHERE r.name IN ($1, $2)
+     ORDER BY r.name DESC, u.fullname ASC`,
+    [ROLES.COMMITTEE_PRESIDENT, ROLES.COMMITTEE]
+  );
+  return result.rows;
+}
+
 const PHASE_FLOW = [
   PHASES.NOMINATION,
   PHASES.REVIEW_END,
@@ -369,7 +444,8 @@ router.patch('/users/:id', requireAdminAuth, async (req, res) => {
     ku_id = '',
     role = '',
     faculty = '',
-    department = ''
+    department = '',
+    password = ''
   } = req.body || {};
 
   const roleName = normalizeManagedRoleInput(role);
@@ -397,6 +473,13 @@ router.patch('/users/:id', requireAdminAuth, async (req, res) => {
   if (requiresKuId(roleName) && !kuIdValue) {
     return res.status(400).json({
       message: 'KU ID is required for student.'
+    });
+  }
+
+  const passwordValue = String(password || '').trim();
+  if (passwordValue && passwordValue.length < 8) {
+    return res.status(400).json({
+      message: 'Password must be at least 8 characters.'
     });
   }
 
@@ -435,6 +518,18 @@ router.patch('/users/:id', requireAdminAuth, async (req, res) => {
         ]
       );
 
+      if (passwordValue) {
+        const salt = gensalt();
+        const passwordHash = hashpw(passwordValue, salt);
+        await client.query(
+          `UPDATE users
+           SET password_hash = $1,
+               updated_at = NOW()
+           WHERE id = $2`,
+          [passwordHash, userId]
+        );
+      }
+
       await client.query('DELETE FROM user_roles WHERE user_id = $1', [userId]);
       await client.query(
         `INSERT INTO user_roles (user_id, role_id, assigned_by)
@@ -470,7 +565,8 @@ router.patch('/users/:id', requireAdminAuth, async (req, res) => {
         newValues: {
           action: 'update_user_profile',
           role: primaryRole,
-          fullname: row.fullname
+          fullname: row.fullname,
+          password_reset: Boolean(passwordValue)
         }
       });
 
@@ -884,6 +980,221 @@ router.get('/statistics', requireAdminAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/vote-summary - Summary of winners before export
+ */
+router.get('/vote-summary', requireAdminAuth, async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const year = Number.parseInt(req.query.academic_year, 10);
+      const semester = Number.parseInt(req.query.semester, 10);
+      if (Number.isNaN(year) || ![1, 2].includes(semester)) {
+        return res.status(400).json({ message: 'Invalid academic year or semester' });
+      }
+
+      const round = await getRoundByAcademic(client, year, semester);
+      if (!round) {
+        return res.status(404).json({ message: 'Round not found' });
+      }
+
+      const totalCommittee = await getCommitteeCount(client);
+      const threshold = Math.floor(totalCommittee / 2) + 1;
+
+      const result = await client.query(
+        `SELECT
+           t.id,
+           t.award_type,
+           t.form_data,
+           t.created_at,
+           u.id AS user_id,
+           u.fullname AS owner_fullname,
+           u.ku_id AS owner_ku_id,
+           u.faculty AS owner_faculty,
+           u.department AS owner_department,
+           COUNT(v.id)::int AS total_votes,
+           COUNT(CASE WHEN v.vote = 'approved' THEN 1 END)::int AS approved_votes
+         FROM tickets t
+         JOIN users u ON u.id = t.user_id
+         LEFT JOIN votes v ON v.ticket_id = t.id
+         WHERE t.round_id = $1
+           AND t.status = 'approved'
+         GROUP BY t.id, u.id
+         ORDER BY t.award_type ASC, t.created_at ASC`,
+        [round.id]
+      );
+
+      const byAward = new Map();
+      for (const row of result.rows) {
+        const formData = row.form_data || {};
+        const candidate = {
+          ticket_id: row.id,
+          user_id: row.user_id,
+          award_type: row.award_type,
+          fullname: formData.full_name || row.owner_fullname || '-',
+          gender: formData.gender || null,
+          ku_id: formData.student_code || row.owner_ku_id || '-',
+          faculty: formData.faculty || row.owner_faculty || '-',
+          department: formData.department || row.owner_department || '-',
+          approved_votes: row.approved_votes || 0,
+          total_votes: row.total_votes || 0,
+          created_at: row.created_at
+        };
+        if (!byAward.has(candidate.award_type)) {
+          byAward.set(candidate.award_type, []);
+        }
+        byAward.get(candidate.award_type).push(candidate);
+      }
+
+      const winners = [];
+      if (threshold > 0) {
+        for (const [, candidates] of byAward.entries()) {
+          const qualified = candidates
+            .filter((item) => item.approved_votes >= threshold)
+            .sort((a, b) => {
+              if (b.approved_votes !== a.approved_votes) {
+                return b.approved_votes - a.approved_votes;
+              }
+              return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+            });
+          if (qualified.length > 0) {
+            winners.push(qualified[0]);
+          }
+        }
+      }
+
+      return res.status(200).json({
+        round: {
+          id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          name: round.name
+        },
+        summary: {
+          total_committee: totalCommittee,
+          threshold_required: threshold
+        },
+        winners
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Get vote summary error:', error);
+    return res.status(500).json({ message: 'Error fetching vote summary' });
+  }
+});
+
+/**
+ * GET /api/admin/vote-detail - Committee vote detail per ticket
+ */
+router.get('/vote-detail', requireAdminAuth, async (req, res) => {
+  try {
+    const client = await pool.connect();
+    try {
+      const year = Number.parseInt(req.query.academic_year, 10);
+      const semester = Number.parseInt(req.query.semester, 10);
+      const ticketId = Number.parseInt(req.query.ticket_id, 10);
+      if (Number.isNaN(year) || ![1, 2].includes(semester)) {
+        return res.status(400).json({ message: 'Invalid academic year or semester' });
+      }
+
+      const round = await getRoundByAcademic(client, year, semester);
+      if (!round) {
+        return res.status(404).json({ message: 'Round not found' });
+      }
+
+      const committeeMembers = await getCommitteeMembers(client);
+      const committeeById = new Map(committeeMembers.map((m) => [m.id, m]));
+
+      const ticketFilterSql = Number.isNaN(ticketId) ? '' : ' AND t.id = $2';
+      const ticketsResult = await client.query(
+        `SELECT
+           t.id,
+           t.award_type,
+           t.form_data,
+           u.fullname AS owner_fullname,
+           u.ku_id AS owner_ku_id,
+           u.faculty AS owner_faculty,
+           u.department AS owner_department
+         FROM tickets t
+         JOIN users u ON u.id = t.user_id
+         WHERE t.round_id = $1
+           AND t.status = 'approved'${ticketFilterSql}
+         ORDER BY t.created_at ASC`,
+        Number.isNaN(ticketId) ? [round.id] : [round.id, ticketId]
+      );
+
+      const votesResult = await client.query(
+        `SELECT ticket_id, user_id, vote, voted_at
+         FROM votes
+         WHERE ticket_id IN (
+           SELECT id FROM tickets WHERE round_id = $1 AND status = 'approved'${Number.isNaN(ticketId) ? '' : ' AND id = $2'}
+         )`,
+        Number.isNaN(ticketId) ? [round.id] : [round.id, ticketId]
+      );
+
+      const votesByTicket = new Map();
+      for (const row of votesResult.rows) {
+        if (!votesByTicket.has(row.ticket_id)) {
+          votesByTicket.set(row.ticket_id, new Map());
+        }
+        votesByTicket.get(row.ticket_id).set(row.user_id, {
+          vote: row.vote,
+          voted_at: row.voted_at
+        });
+      }
+
+      const tickets = ticketsResult.rows.map((row) => {
+        const formData = row.form_data || {};
+        const ticketVotes = votesByTicket.get(row.id) || new Map();
+        const committeeVotes = committeeMembers.map((member) => {
+          const voteInfo = ticketVotes.get(member.id);
+          return {
+            user_id: member.id,
+            fullname: member.fullname || member.email,
+            email: member.email,
+            role: member.role,
+            vote: voteInfo ? voteInfo.vote : null,
+            voted_at: voteInfo ? voteInfo.voted_at : null
+          };
+        });
+
+        return {
+          ticket_id: row.id,
+          award_type: row.award_type,
+          fullname: formData.full_name || row.owner_fullname || '-',
+          ku_id: formData.student_code || row.owner_ku_id || '-',
+          faculty: formData.faculty || row.owner_faculty || '-',
+          department: formData.department || row.owner_department || '-',
+          votes: committeeVotes
+        };
+      });
+
+      return res.status(200).json({
+        round: {
+          id: round.id,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          name: round.name
+        },
+        committee: committeeMembers.map((m) => ({
+          id: m.id,
+          fullname: m.fullname || m.email,
+          email: m.email,
+          role: m.role
+        })),
+        tickets
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Get vote detail error:', error);
+    return res.status(500).json({ message: 'Error fetching vote detail' });
+  }
+});
+
+/**
  * GET /api/admin/vote-progress - Get detailed voting progress for all award types
  */
 router.get('/vote-progress', requireAdminAuth, async (req, res) => {
@@ -964,6 +1275,106 @@ router.get('/vote-progress', requireAdminAuth, async (req, res) => {
   } catch (error) {
     console.error('Get voting progress error:', error);
     res.status(500).json({ message: 'Error fetching voting progress' });
+  }
+});
+
+/**
+ * POST /api/admin/announce-winners
+ * Announce winners and mark tickets when export is triggered
+ */
+router.post('/announce-winners', requireAdminAuth, async (req, res) => {
+  try {
+    const result = await transaction(async (client) => {
+      const round = await resolveRound(client, req.body || {});
+      if (!round) {
+        throw new Error('Round not found');
+      }
+
+      const phaseInfo = await getCurrentPhaseForRound(client, round.id);
+      if (!phaseInfo || phaseInfo.phase !== PHASES.CERTIFICATE) {
+        throw new Error(`Announce is allowed only in CERTIFICATE phase (current phase: ${phaseInfo?.phase || 'NONE'})`);
+      }
+
+      const voteResult = await getRoundVoteWinners(client, round.id);
+      const winnerIdSet = new Set(voteResult.winners);
+      const candidatesResult = await client.query(
+        `SELECT id, form_data
+         FROM tickets
+         WHERE round_id = $1
+           AND status = $2`,
+        [round.id, TICKET_STATUS.APPROVED]
+      );
+
+      const nowIso = new Date().toISOString();
+      let updatedCount = 0;
+      for (const row of candidatesResult.rows) {
+        const formData = row.form_data || {};
+        if (formData.proclamation_result) {
+          continue;
+        }
+
+        const isWinner = winnerIdSet.has(row.id);
+        const statusLog = Array.isArray(formData.status_log) ? formData.status_log : [];
+        statusLog.push({
+          action: 'announce',
+          status: 'announced',
+          actor_id: req.session.user_id,
+          actor_role: ROLES.ADMIN,
+          timestamp: nowIso,
+          remark: 'Announced on export.'
+        });
+
+        const nextFormData = {
+          ...formData,
+          workflow_status: 'announced',
+          proclamation_result: isWinner ? 'winner' : 'not_selected',
+          result_announced_at: nowIso,
+          announced_at: isWinner ? nowIso : (formData.announced_at || null),
+          status_log: statusLog
+        };
+
+        await client.query(
+          `UPDATE tickets
+           SET form_data = $1,
+               updated_at = NOW()
+           WHERE id = $2`,
+          [JSON.stringify(nextFormData), row.id]
+        );
+        updatedCount += 1;
+      }
+
+      await createAuditLog(client, req.session.user_id, LOG_ACTIONS.ADMIN_ACTION, {
+        resourceType: 'ticket',
+        resourceId: round.id,
+        newValues: {
+          action: 'announce_winners',
+          round_id: round.id,
+          updated_count: updatedCount,
+          winner_ids: voteResult.winners
+        }
+      });
+
+      return {
+        round,
+        updated_count: updatedCount,
+        winner_count: voteResult.winners.length
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Announced winners successfully',
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester
+      },
+      updated_count: result.updated_count,
+      winner_count: result.winner_count
+    });
+  } catch (error) {
+    console.error('Announce winners error:', error);
+    return res.status(400).json({ message: error.message || 'Error announcing winners' });
   }
 });
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { authenticatedApiRequest } from '../utils/api';
 import { getRoleLabel } from '../utils/roleLabels';
@@ -16,30 +16,40 @@ const Navbar = () => {
   const [roundInfo, setRoundInfo] = useState(null);
   const [phase, setPhase] = useState(null);
 
+  const fetchRoundPhase = useCallback(async () => {
+    try {
+      const response = await authenticatedApiRequest('/api/auth/phase');
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setRoundInfo(data.round || null);
+      setPhase(data.phase || null);
+    } catch {
+      // Keep navbar stable if phase API fails
+    }
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
-    const fetchRoundPhase = async () => {
-      try {
-        const response = await authenticatedApiRequest('/api/auth/phase');
-        if (!response.ok) return;
-
-        const data = await response.json();
-        if (!isMounted) return;
-
-        setRoundInfo(data.round || null);
-        setPhase(data.phase || null);
-      } catch {
-        // Keep navbar stable if phase API fails
-      }
+    const run = async () => {
+      if (!isMounted) return;
+      await fetchRoundPhase();
     };
 
-    fetchRoundPhase();
+    run();
+
+    const refreshHandler = () => {
+      fetchRoundPhase();
+    };
+
+    window.addEventListener('phase:refresh', refreshHandler);
 
     return () => {
       isMounted = false;
+      window.removeEventListener('phase:refresh', refreshHandler);
     };
-  }, []);
+  }, [fetchRoundPhase]);
 
   const academicLabel = useMemo(() => {
     if (!roundInfo) return 'รอบการศึกษา -';
@@ -61,15 +71,12 @@ const Navbar = () => {
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 fixed top-0 left-64 right-0 z-40">
-      {/* Left: Breadcrumb or Title (Optional) */}
       <div className="text-sm text-gray-500">
         {academicLabel}
         <span className="text-ku-main font-semibold">{phaseLabel ? ` - ${phaseLabel}` : ''}</span>
       </div>
 
-      {/* Right: User Profile */}
       <div className="flex items-center gap-6">
-        
         <div className="flex items-center gap-3 pl-6 border-l border-gray-200">
           <div className="text-right hidden sm:block">
             <p className="text-sm font-bold text-gray-800">{user?.fullname || 'ผู้ใช้'}</p>

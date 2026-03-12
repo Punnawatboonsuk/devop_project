@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import ActionModal from '../../components/ActionModal';
 import StatusBadge from '../../components/StatusBadge';
+import FilePreviewButton from '../../components/FilePreviewButton';
 import { authenticatedApiRequest } from '../../utils/api';
 import { getRoleLabel } from '../../utils/roleLabels';
 import toast from 'react-hot-toast';
@@ -197,10 +198,10 @@ const ReviewTicket = () => {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {files.map((file) => (
-                    <a
+                    <FilePreviewButton
                       key={file.id}
-                      href={`/api/uploads/file/${file.id}/download`}
-                      className="flex items-center justify-between p-3 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-200 transition cursor-pointer group"
+                      file={file}
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-200 transition cursor-pointer group w-full text-left"
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
                         <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs bg-blue-100 text-blue-600">ไฟล์</div>
@@ -210,7 +211,7 @@ const ReviewTicket = () => {
                         </div>
                       </div>
                       <Download size={18} className="text-gray-300 group-hover:text-blue-600" />
-                    </a>
+                    </FilePreviewButton>
                   ))}
                 </div>
               )}
@@ -235,7 +236,7 @@ const ReviewTicket = () => {
                           <p className="text-sm font-bold text-gray-800 break-words">{log.action}</p>
                           <p className="text-xs text-gray-500">{formatDate(log.timestamp)}</p>
                           <div className="mt-1 bg-green-50/50 p-2 rounded-lg text-xs text-green-700 border border-green-100 inline-block break-words max-w-full">
-                            {log.notes || `�� ${log.actor_name || `����� ${log.actor_id || '-'}`}`}
+                            {log.notes || `โดย ${log.actor_name || `ผู้ใช้ ${log.actor_id || '-'}`}`}
                           </div>
                         </div>
                       </div>

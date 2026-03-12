@@ -410,9 +410,12 @@ router.get('/tickets/:ticketId', requireCommitteeAuth, async (req, res) => {
         download_url: `/api/uploads/file/${file.id}/download`
       }));
 
+      const phaseInfo = await getCurrentPhaseForRound(client, ticket.round_id);
+
       return res.status(200).json({
         candidate,
-        files
+        files,
+        phase: phaseInfo?.phase || null
       });
     } finally {
       client.release();

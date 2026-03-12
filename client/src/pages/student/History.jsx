@@ -1,17 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Eye, Calendar, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import StatusBadge from '../../components/StatusBadge';
 import { authenticatedApiRequest } from '../../utils/api';
 
 const AWARD_LABELS = {
-  academic: 'ด้านวิชาการ',
-  sport: 'ด้านกีฬา',
-  arts_culture: 'ด้านศิลปวัฒนธรรม',
-  moral_ethics: 'ด้านคุณธรรมจริยธรรม',
-  social_service: 'ด้านบำเพ็ญประโยชน์',
-  innovation: 'ด้านนวัตกรรม',
-  entrepreneurship: 'ด้านผู้ประกอบการ'
+  activity_enrichment: '1.1. ด้านกิจกรรมเสริมหลักสูตร',
+  creativity_innovation: '1.2. ด้านความคิดสร้างสรรค์และนวัตกรรม',
+  good_behavior: '1.3. ด้านความประพฤติดี'
 };
 
 const StudentHistory = () => {
@@ -67,15 +63,15 @@ const StudentHistory = () => {
     });
   };
 
-  const renderProclamationResult = (ticket) => {
-    const result = ticket?.proclamation_result;
+  const renderResult = (ticket) => {
+    const result = ticket?.proclamation_result || null;
     if (result === 'winner') {
-      return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">ได้รับรางวัล</span>;
+      return <span className="text-xs font-bold text-green-700">ได้รับรางวัล</span>;
     }
     if (result === 'not_selected') {
-      return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">ไม่ผ่านการคัดเลือก</span>;
+      return <span className="text-xs font-bold text-red-600">ไม่ได้รับรางวัล</span>;
     }
-    return <span className="text-xs text-gray-400">รอประกาศผล</span>;
+    return null;
   };
 
   return (
@@ -120,7 +116,6 @@ const StudentHistory = () => {
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">ใบสมัคร</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">วันที่ส่ง</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">สถานะ</th>
-              <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">ผลประกาศ</th>
               <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase text-right">การดำเนินการ</th>
             </tr>
           </thead>
@@ -142,10 +137,10 @@ const StudentHistory = () => {
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">{formatDate(ticket.submitted_at || ticket.created_at)}</td>
                   <td className="px-6 py-4">
-                    <StatusBadge status={ticket.status} />
-                  </td>
-                  <td className="px-6 py-4">
-                    {renderProclamationResult(ticket)}
+                    <div className="flex flex-col gap-1">
+                      <StatusBadge status={ticket.status} />
+                      {renderResult(ticket)}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-right">
                     <Link
@@ -160,7 +155,7 @@ const StudentHistory = () => {
             ) : (
               !loading && (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-gray-400">
+                  <td colSpan="5" className="px-6 py-12 text-center text-gray-400">
                     ไม่พบประวัติใบสมัคร
                   </td>
                 </tr>

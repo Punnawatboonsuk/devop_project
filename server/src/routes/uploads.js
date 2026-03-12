@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { pool, transaction } = require('../config/database');
 const { upload, getTicketFiles, upsertTicketFiles, deleteFileById, findFileById, createAuditLog } = require('../utils/fileUtils');
 const { ROLES, ERROR_MESSAGES } = require('../utils/constants');
@@ -42,6 +42,10 @@ function isAdmin(userRoles) {
 
 function isStaffOrHigher(userRoles) {
   return userRoles.some((role) => [ROLES.STAFF, ROLES.SUB_DEAN, ROLES.DEAN, ROLES.ADMIN].includes(role));
+}
+
+function isCommitteeOrPresident(userRoles) {
+  return userRoles.some((role) => [ROLES.COMMITTEE, ROLES.COMMITTEE_PRESIDENT].includes(role));
 }
 
 function isTicketOwner(userRoles, ticketOwnerId) {
@@ -151,7 +155,7 @@ router.get('/ticket/:ticketId', [requireAuth, getUserRoles], async (req, res) =>
 
       const ticketOwnerId = ticketResult.rows[0].user_id;
       const isOwner = ticketOwnerId === req.session.user_id;
-      const canView = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles);
+      const canView = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles) || isCommitteeOrPresident(req.userRoles);
 
       if (!canView) {
         return res.status(403).json({ message: ERROR_MESSAGES.FORBIDDEN });
@@ -189,7 +193,7 @@ router.get('/file/:fileId', [requireAuth, getUserRoles], async (req, res) => {
       }
 
       const isOwner = file.ticket_owner_id === req.session.user_id;
-      const canView = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles);
+      const canView = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles) || isCommitteeOrPresident(req.userRoles);
 
       if (!canView) {
         return res.status(403).json({ message: ERROR_MESSAGES.FORBIDDEN });
@@ -234,7 +238,7 @@ router.get('/file/:fileId/download', [requireAuth, getUserRoles], async (req, re
       }
 
       const isOwner = file.ticket_owner_id === req.session.user_id;
-      const canDownload = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles);
+      const canDownload = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles) || isCommitteeOrPresident(req.userRoles);
 
       if (!canDownload) {
         return res.status(403).json({ message: ERROR_MESSAGES.FORBIDDEN });
@@ -259,6 +263,46 @@ router.get('/file/:fileId/download', [requireAuth, getUserRoles], async (req, re
   } catch (error) {
     console.error('Download file error:', error);
     return res.status(500).json({ message: 'Error downloading file.' });
+  }
+});
+
+// GET /api/uploads/file/:fileId/view - Inline preview for PDF/image
+router.get('/file/:fileId/view', [requireAuth, getUserRoles], async (req, res) => {
+  const fileId = Number.parseInt(req.params.fileId, 10);
+  if (Number.isNaN(fileId)) {
+    return res.status(400).json({ message: 'Invalid file id.' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const file = await findFileById(client, fileId);
+      if (!file) {
+        return res.status(404).json({ message: 'File not found.' });
+      }
+
+      const isOwner = file.ticket_owner_id === req.session.user_id;
+      const canView = isOwner || isAdmin(req.userRoles) || isStaffOrHigher(req.userRoles) || isCommitteeOrPresident(req.userRoles);
+      if (!canView) {
+        return res.status(403).json({ message: ERROR_MESSAGES.FORBIDDEN });
+      }
+
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.join(__dirname, '../../', file.file_path);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: 'File not found on server.' });
+      }
+
+      res.setHeader('Content-Disposition', `inline; filename="${file.original_name}"`);
+      res.setHeader('Content-Type', file.mime_type);
+      return res.sendFile(filePath);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('View file error:', error);
+    return res.status(500).json({ message: 'Error viewing file.' });
   }
 });
 

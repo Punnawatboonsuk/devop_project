@@ -1,17 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText, Calendar, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import StatusTimeline from '../../components/StatusTimeline';
 import StatusBadge from '../../components/StatusBadge';
 import { authenticatedApiRequest } from '../../utils/api';
 
 const AWARD_LABELS = {
-  academic: 'ด้านวิชาการ',
-  sport: 'ด้านกีฬา',
-  arts_culture: 'ด้านศิลปวัฒนธรรม',
-  moral_ethics: 'ด้านคุณธรรมจริยธรรม',
-  social_service: 'ด้านบำเพ็ญประโยชน์',
-  innovation: 'ด้านนวัตกรรม',
-  entrepreneurship: 'ด้านผู้ประกอบการ'
+  activity_enrichment: '1.1. ด้านกิจกรรมเสริมหลักสูตร',
+  creativity_innovation: '1.2. ด้านความคิดสร้างสรรค์และนวัตกรรม',
+  good_behavior: '1.3. ด้านความประพฤติดี'
 };
 
 const Tracking = () => {
@@ -117,10 +113,6 @@ const Tracking = () => {
     });
   };
 
-  const proclamationResult = selectedTicket?.proclamation_result || null;
-  const isWinner = proclamationResult === 'winner';
-  const isNotSelected = proclamationResult === 'not_selected';
-
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
@@ -196,23 +188,20 @@ const Tracking = () => {
                       <span className="flex items-center gap-1"><Calendar size={16} /> ส่งเมื่อ: {formatDate(selectedTicket.submitted_at || selectedTicket.created_at)}</span>
                     </div>
                   </div>
-                  <StatusBadge status={selectedTicket.status} />
+                  <div className="flex flex-col items-end gap-1">
+                    <StatusBadge status={selectedTicket.status} />
+                    {selectedTicket.proclamation_result === 'winner' && (
+                      <span className="text-xs font-bold text-green-700">ได้รับรางวัล</span>
+                    )}
+                    {selectedTicket.proclamation_result === 'not_selected' && (
+                      <span className="text-xs font-bold text-red-600">ไม่ได้รับรางวัล</span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="py-2">
                   <StatusTimeline currentStatus={selectedTicket.status} />
                 </div>
-
-                {(isWinner || isNotSelected) && (
-                  <div className={`mt-6 border rounded-xl p-4 ${isWinner ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-                    <p className="font-bold">
-                      ผลการประกาศ: {isWinner ? 'ผ่านการคัดเลือก (ได้รับรางวัล)' : 'ไม่ผ่านการคัดเลือก'}
-                    </p>
-                    <p className="text-sm mt-1">
-                      ประกาศเมื่อ: {formatDate(selectedTicket.result_announced_at)}
-                    </p>
-                  </div>
-                )}
               </div>
 
               <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">

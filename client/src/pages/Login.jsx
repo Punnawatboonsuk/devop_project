@@ -17,7 +17,7 @@ const Login = () => {
       STAFF: '/staff/dashboard',
       SUB_DEAN: '/staff/dashboard',
       DEAN: '/staff/dashboard',
-      ADMIN: '/admin/verification',
+      ADMIN: '/admin/dashboard',
       COMMITTEE: '/committee/dashboard',
       COMMITTEE_PRESIDENT: '/committee/dashboard',
     };
