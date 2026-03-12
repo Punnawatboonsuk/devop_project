@@ -442,6 +442,14 @@ const VotingControl = () => {
 
     try {
       setUploadingDeanSigned(true);
+      await authenticatedApiRequest('/api/certificates/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          academic_year: filters.academic_year,
+          semester: filters.semester
+        })
+      }).catch(() => {});
       const formData = new FormData();
       formData.append('signed_file', deanSignedFile);
       formData.append('academic_year', String(filters.academic_year));

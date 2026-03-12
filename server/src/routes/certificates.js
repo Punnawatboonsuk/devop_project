@@ -623,6 +623,128 @@ router.get('/pending', requireAdminOrPresident, async (req, res) => {
   }
 });
 
+// POST /api/certificates/prepare - Create draft certificate records (no PDF)
+router.post('/prepare', requireAdminOrPresident, async (req, res) => {
+  try {
+    const result = await transaction(async (client) => {
+      const round = await resolveRound(client, req.body || {});
+      if (!round) {
+        throw new Error('Round not found');
+      }
+
+      const phaseInfo = await getCurrentPhaseForRound(client, round.id);
+      if (!phaseInfo || phaseInfo.phase !== PHASES.CERTIFICATE) {
+        throw new Error(
+          `Prepare certificates is allowed only in CERTIFICATE phase (current phase: ${phaseInfo?.phase || 'NONE'})`
+        );
+      }
+
+      let winners = await getRoundWinnersForCertificate(client, round.id);
+      if (winners.length === 0) {
+        winners = await getRoundWinnersFromVotes(client, round.id);
+      }
+      if (winners.length === 0) {
+        throw new Error('No winners found for this round from proclamation or voting results.');
+      }
+
+      const created = [];
+      for (const winner of winners) {
+        const certificateNumber = `ND-${round.academic_year}-${round.semester}-${winner.ticket_id}`;
+        const existing = await client.query(
+          `SELECT id, status
+           FROM certificates
+           WHERE ticket_id = $1
+           ORDER BY updated_at DESC NULLS LAST, id DESC
+           LIMIT 1`,
+          [winner.ticket_id]
+        );
+
+        const templateData = {
+          round_id: round.id,
+          round_name: round.name,
+          academic_year: round.academic_year,
+          semester: round.semester,
+          winner: {
+            ticket_id: winner.ticket_id,
+            user_id: winner.user_id,
+            fullname: winner.fullname,
+            ku_id: winner.ku_id,
+            faculty: winner.faculty,
+            department: winner.department,
+            award_type: winner.award_type
+          },
+          proclamation_signature: winner.proclamation_signature || null
+        };
+
+        if (
+          existing.rows.length > 0 &&
+          ![CERTIFICATE_STATUS.SIGNED, CERTIFICATE_STATUS.PUBLISHED].includes(existing.rows[0].status)
+        ) {
+          await client.query(
+            `UPDATE certificates
+             SET certificate_number = $1,
+                 status = $2::certificate_status,
+                 template_data = $3::jsonb,
+                 generated_by = $4,
+                 generated_at = NOW()
+             WHERE id = $5`,
+            [
+              certificateNumber,
+              CERTIFICATE_STATUS.DRAFT,
+              JSON.stringify(templateData),
+              req.session.user_id,
+              existing.rows[0].id
+            ]
+          );
+          created.push({ id: existing.rows[0].id, ticket_id: winner.ticket_id });
+        } else {
+          const inserted = await client.query(
+            `INSERT INTO certificates (ticket_id, certificate_number, status, generated_by, template_data)
+             VALUES ($1, $2, $3::certificate_status, $4, $5::jsonb)
+             RETURNING id`,
+            [
+              winner.ticket_id,
+              certificateNumber,
+              CERTIFICATE_STATUS.DRAFT,
+              req.session.user_id,
+              JSON.stringify(templateData)
+            ]
+          );
+          created.push({ id: inserted.rows[0].id, ticket_id: winner.ticket_id });
+        }
+      }
+
+      await createAuditLog(client, req.session.user_id, LOG_ACTIONS.CERTIFICATE_GENERATE, {
+        resourceType: 'certificate',
+        resourceId: created[0]?.id || null,
+        newValues: {
+          round_id: round.id,
+          generated_count: created.length,
+          file_path: null
+        }
+      });
+
+      return { round, created };
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Certificate records prepared successfully',
+      round: {
+        id: result.round.id,
+        academic_year: result.round.academic_year,
+        semester: result.round.semester,
+        name: result.round.name
+      },
+      generated_count: result.created.length,
+      certificates: result.created
+    });
+  } catch (error) {
+    console.error('Prepare certificates error:', error);
+    return res.status(400).json({ message: error.message || 'Error preparing certificates' });
+  }
+});
+
 // GET /api/certificates/preview - Preview unsigned certificate package (no save)
 router.get('/preview', requireAdminOrPresident, async (req, res) => {
   try {

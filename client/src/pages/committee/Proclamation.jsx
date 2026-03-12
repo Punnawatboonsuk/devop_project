@@ -148,6 +148,14 @@ const Proclamation = () => {
 
     try {
       setUploadingSigned(true);
+      await authenticatedApiRequest('/api/certificates/prepare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          academic_year: data?.round?.academic_year,
+          semester: data?.round?.semester
+        })
+      }).catch(() => {});
       const formData = new FormData();
       formData.append('signed_file', signedFile);
       if (data?.round?.id) {
