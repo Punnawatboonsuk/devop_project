@@ -5,7 +5,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: nisit-uat.local
+    - host: nisit.k8s.dev
       http:
         paths:
           - path: /
